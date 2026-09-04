@@ -16,6 +16,8 @@ import { effectOf, isPropagating } from "./reversibility.js";
 export function auditSafety(snapshot: Snapshot): DiffResult {
   const findings: Finding[] = [];
 
+  checkRegistration(snapshot, findings);
+
   for (const tool of snapshot.tools) {
     checkIdempotency(tool, findings);
     checkSensitiveParameters(tool, findings);
@@ -25,6 +27,41 @@ export function auditSafety(snapshot: Snapshot): DiffResult {
   }
 
   return summarize(findings);
+}
+
+/**
+ * The failure that costs the most and shows the least.
+ *
+ * If `document.modelContext` is absent — an origin-trial token that lapsed, a
+ * flag that isn't set, a script that ran too early — then every
+ * `registerTool()` call on the page throws nothing and does nothing. The site
+ * looks fine to every human who visits, and exposes nothing to every agent.
+ * One team shipped in that state for three months without noticing.
+ */
+function checkRegistration(snapshot: Snapshot, findings: Finding[]): void {
+  if (snapshot.apiAvailable === false) {
+    findings.push({
+      severity: "breaking",
+      code: "API_UNAVAILABLE",
+      tool: "(page)",
+      message:
+        `\`document.modelContext\` does not exist on this page, so every ` +
+        `registerTool() call is a silent no-op and agents see nothing. Usually a ` +
+        `lapsed origin-trial token, or the meta tag missing on this route.`,
+    });
+    return;
+  }
+
+  if (snapshot.tools.length === 0) {
+    findings.push({
+      severity: "breaking",
+      code: "NO_TOOLS_REGISTERED",
+      tool: "(page)",
+      message:
+        `The API is available but nothing registered. If this page is meant to ` +
+        `expose tools, registration failed or ran after the page settled.`,
+    });
+  }
 }
 
 /**

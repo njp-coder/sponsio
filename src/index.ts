@@ -3,6 +3,7 @@ export type { CaptureOptions, InvocationResult, LiveTool, Session } from "./capt
 export { auditReversibility, effectOf, isPropagating } from "./reversibility.js";
 export type { Effect } from "./reversibility.js";
 export { auditSafety } from "./safety.js";
+export { auditInstrumentation } from "./instrumentation.js";
 export { probeConformance, buildViolations, buildValidInput } from "./conformance.js";
 export type { ProbeOptions } from "./conformance.js";
 export { diffSnapshots, shouldFail, summarize } from "./diff.js";

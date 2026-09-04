@@ -7,6 +7,7 @@ import { diffSnapshots, shouldFail, summarize, type FailOn } from "./diff.js";
 import { auditReversibility } from "./reversibility.js";
 import { auditSafety } from "./safety.js";
 import { probeConformance } from "./conformance.js";
+import { auditInstrumentation } from "./instrumentation.js";
 import { renderConsole, renderMarkdown } from "./report.js";
 import type { DiffResult, Finding, Snapshot } from "./types.js";
 
@@ -81,6 +82,7 @@ program
   .argument("<target>", "page to load, or a saved snapshot file")
   .description("check whether agents can safely act here: reversibility, and schema enforcement")
   .option("--probe", "also call each tool with input its own schema forbids")
+  .option("--no-visitor-check", "skip the second pass that checks what a stock browser sees")
   .option("--probe-unsafe", "probe tools that are not declared readOnly (this really calls them)")
   .option("--fail-on <level>", "breaking | warning | any | never", "breaking")
   .option("--settle <ms>", "quiet period before reading tools", "400")
@@ -124,11 +126,33 @@ program
                 includeUnsafe: Boolean(options.probeUnsafe),
               });
               collected.push(...probed.findings);
+
+              const telemetry = await auditInstrumentation(session, {
+                includeUnsafe: Boolean(options.probeUnsafe),
+              });
+              collected.push(...telemetry.findings);
             }
             return collected;
           },
         ),
       );
+
+      // Second pass without the feature forced on: what a visitor's own browser
+      // actually sees. A site relying on a lapsed origin-trial token looks
+      // perfectly healthy in the first pass and exposes nothing in this one.
+      if (options.visitorCheck !== false) {
+        const asVisitor = await run(() =>
+          capture({
+            url: target,
+            settleMs: Number(options.settle),
+            timeoutMs: Number(options.timeout),
+            executablePath: options.executablePath,
+            headless: options.headless,
+            forceFeature: false,
+          }),
+        );
+        findings.push(...compareVisibility(findings, asVisitor));
+      }
     }
 
     await emit(summarize(findings), label, options);
@@ -152,6 +176,30 @@ interface EmitOptions {
   json?: boolean;
   markdown?: string;
   failOn: string;
+}
+
+/**
+ * Compares what the site intends to expose against what an unmodified browser
+ * finds. Anything in the gap is invisible to every real agent.
+ */
+function compareVisibility(existing: Finding[], asVisitor: Snapshot): Finding[] {
+  const registered = existing.some((f) => f.tool !== "(page)");
+  if (!registered) return [];
+
+  if (asVisitor.apiAvailable === false || asVisitor.tools.length === 0) {
+    return [
+      {
+        severity: "breaking",
+        code: "INVISIBLE_TO_VISITORS",
+        tool: "(page)",
+        message:
+          `Tools register when WebMCP is forced on, but a stock browser finds none. ` +
+          `Real visitors' agents see nothing here — usually a missing or expired ` +
+          `origin-trial token on this route. Nothing errors; the site just goes quiet.`,
+      },
+    ];
+  }
+  return [];
 }
 
 function isUrl(value: string): boolean {

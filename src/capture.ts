@@ -9,6 +9,12 @@ export interface CaptureOptions {
   /** Path to a Chrome 151+ binary, if not using the bundled one. */
   executablePath?: string;
   headless?: boolean;
+  /**
+   * Force the WebMCP feature on. True by default, which is what you want to
+   * read a site's intended tool surface. Set false to see the page the way a
+   * stock browser does — i.e. whether the site's own origin-trial token works.
+   */
+  forceFeature?: boolean;
   /** Extra Chromium launch flags. */
   args?: string[];
 }
@@ -24,11 +30,9 @@ const DEFAULTS = {
  * `blink::features::kWebMCP`, so enabling the feature by name is equivalent and
  * needs no origin-trial token.
  */
-export const WEBMCP_LAUNCH_ARGS = [
-  "--enable-features=WebMCP",
-  "--no-sandbox",
-  "--disable-setuid-sandbox",
-];
+const SANDBOX_ARGS = ["--no-sandbox", "--disable-setuid-sandbox"];
+
+export const WEBMCP_LAUNCH_ARGS = ["--enable-features=WebMCP", ...SANDBOX_ARGS];
 
 export interface InvocationResult {
   status: "Completed" | "Canceled" | "Error";
@@ -44,6 +48,8 @@ export interface LiveTool extends ToolRecord {
 export interface Session {
   snapshot: Snapshot;
   tools: LiveTool[];
+  /** Runs a script in the page. Used to observe side effects of a tool call. */
+  evaluate<T = unknown>(script: string): Promise<T>;
 }
 
 /**
@@ -76,7 +82,10 @@ export async function withSession<T>(
   const browser = await puppeteer.launch({
     headless: options.headless ?? DEFAULTS.headless,
     executablePath: options.executablePath,
-    args: [...WEBMCP_LAUNCH_ARGS, ...(options.args ?? [])],
+    args: [
+      ...(options.forceFeature === false ? SANDBOX_ARGS : WEBMCP_LAUNCH_ARGS),
+      ...(options.args ?? []),
+    ],
   });
 
   try {
@@ -104,6 +113,12 @@ export async function withSession<T>(
       await sleep(50);
     }
 
+    // An absent modelContext means every registerTool() on the page was a
+    // silent no-op — the single most damaging failure mode in this API.
+    const apiAvailable = Boolean(
+      await page.evaluate("typeof document !== 'undefined' && !!document.modelContext"),
+    );
+
     const raw = webmcp.tools();
     const records = await Promise.all(raw.map(normalizeTool));
     const tools: LiveTool[] = records
@@ -121,10 +136,15 @@ export async function withSession<T>(
       url: options.url,
       capturedAt: new Date().toISOString(),
       userAgent: await browser.version(),
+      apiAvailable,
       tools: tools.map(stripExecute),
     };
 
-    return await fn({ snapshot, tools });
+    return await fn({
+      snapshot,
+      tools,
+      evaluate: <T,>(script: string) => page.evaluate(script) as Promise<T>,
+    });
   } finally {
     await browser.close();
   }
@@ -265,6 +285,7 @@ interface PuppeteerModule {
   }): Promise<{
     newPage(): Promise<{
       goto(url: string, options?: { waitUntil?: string; timeout?: number }): Promise<unknown>;
+      evaluate(script: string): Promise<unknown>;
       webmcp?: PuppeteerWebMcp;
     }>;
     version(): Promise<string>;

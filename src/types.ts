@@ -47,6 +47,14 @@ export interface Snapshot {
   url: string;
   capturedAt: string;
   userAgent?: string;
+  /**
+   * Whether `document.modelContext` existed at all on the page.
+   *
+   * Without it every `registerTool()` call is a silent no-op — no error, no
+   * warning, just a site that quietly exposes nothing. This distinguishes
+   * "the API was off" from "you registered no tools".
+   */
+  apiAvailable?: boolean;
   tools: ToolRecord[];
 }
 

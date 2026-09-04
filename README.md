@@ -71,6 +71,8 @@ Four checks, each from a way agents actually fail:
 
 **Sensitive parameters.** Whatever a schema asks for, the model will try to supply, from its context or by asking the user in chat. A tool whose schema takes a card number, CVV, password, or government ID is routing that data through a language model.
 
+**Visibility.** sponsio looks twice: once with WebMCP forced on, to read what you *intend* to expose, and once as a stock browser, to see what a visitor's agent actually finds. A site whose origin-trial token has lapsed looks perfectly healthy in the first pass and exposes nothing in the second. Nothing errors — the site just goes quiet. One team shipped in that state for three months.
+
 **Effect escape.** Some actions have an inverse that doesn't actually undo them. A recalled message may already have been read; a refunded charge still moved money. Structural reversibility and real reversibility are different things, and only the first is visible in a schema.
 
 ### Probing: does a tool honor its own schema?
@@ -82,6 +84,12 @@ npx sponsio audit https://shop.example --probe
 ```
 
 This calls each tool with input its schema forbids — a missing required field, a value outside an enum, a number past its maximum — and reports what gets accepted. Because probing really invokes tools, anything not declared `readOnly` is skipped unless you pass `--probe-unsafe`.
+
+### Is anyone measuring what agents do?
+
+A tool call is a plain function call in the page. It fires no page view, no click, no form submission — so an agent that searches, adds to a cart and checks out leaves you one page view and a conversion with no funnel behind it. Neither the WebMCP spec nor Chrome's docs mention analytics anywhere, and agentic browsers arrive on ordinary Chrome user agents that bot filters cannot catch, so this traffic is invisible rather than merely mislabelled.
+
+With `--probe`, sponsio calls each tool and watches whether anything is recorded — `dataLayer`, `gtag`, `sendBeacon`, or a request to a known analytics endpoint — and tells you which of your tools are silent.
 
 ## CI
 
