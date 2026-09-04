@@ -85,6 +85,20 @@ npx sponsio audit https://shop.example --probe
 
 This calls each tool with input its schema forbids — a missing required field, a value outside an enum, a number past its maximum — and reports what gets accepted. Because probing really invokes tools, anything not declared `readOnly` is skipped unless you pass `--probe-unsafe`.
 
+### Does anything stop an agent calling it in a loop?
+
+Agents retry on error by default — every framework does it for you. A human clicking a button is self-limiting; an agent is not. The most-read agent incident of the year was an operator waking to a $6,531 bill after one retried a failing action all night.
+
+Rate limiting cannot be read off a schema, because WebMCP has no field for it. So sponsio measures the behavior instead:
+
+```bash
+npx sponsio audit https://shop.example --burst 20
+```
+
+Each tool is called rapidly and watched for rejections or for the site deliberately slowing down. No throttle in either form is a warning. This is opt-in and off by default — it generates real load, and it only touches `readOnly` tools unless you pass `--probe-unsafe`.
+
+**On cost, honestly: there is nothing to check.** WebMCP has no way for a tool to declare what a call costs — in money, credits, or quota — so an agent consuming a paid service has no price signal at all and cannot budget. That is a gap in the standard rather than something a linter can find, and it is worth raising with the working group rather than guessing at it here.
+
 ### Is anyone measuring what agents do?
 
 A tool call is a plain function call in the page. It fires no page view, no click, no form submission — so an agent that searches, adds to a cart and checks out leaves you one page view and a conversion with no funnel behind it. Neither the WebMCP spec nor Chrome's docs mention analytics anywhere, and agentic browsers arrive on ordinary Chrome user agents that bot filters cannot catch, so this traffic is invisible rather than merely mislabelled.

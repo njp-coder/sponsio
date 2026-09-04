@@ -8,6 +8,7 @@ import { auditReversibility } from "./reversibility.js";
 import { auditSafety } from "./safety.js";
 import { probeConformance } from "./conformance.js";
 import { auditInstrumentation } from "./instrumentation.js";
+import { probeRateLimits } from "./burst.js";
 import { renderConsole, renderMarkdown } from "./report.js";
 import type { DiffResult, Finding, Snapshot } from "./types.js";
 
@@ -82,6 +83,7 @@ program
   .argument("<target>", "page to load, or a saved snapshot file")
   .description("check whether agents can safely act here: reversibility, and schema enforcement")
   .option("--probe", "also call each tool with input its own schema forbids")
+  .option("--burst <n>", "call each tool n times rapidly to see whether anything throttles it")
   .option("--no-visitor-check", "skip the second pass that checks what a stock browser sees")
   .option("--probe-unsafe", "probe tools that are not declared readOnly (this really calls them)")
   .option("--fail-on <level>", "breaking | warning | any | never", "breaking")
@@ -131,6 +133,18 @@ program
                 includeUnsafe: Boolean(options.probeUnsafe),
               });
               collected.push(...telemetry.findings);
+            }
+
+            if (options.burst) {
+              const calls = Number(options.burst);
+              if (!Number.isInteger(calls) || calls < 2 || calls > 200) {
+                fail("--burst must be a whole number between 2 and 200.");
+              }
+              const bursts = await probeRateLimits(session.tools, {
+                calls,
+                includeUnsafe: Boolean(options.probeUnsafe),
+              });
+              collected.push(...bursts.findings);
             }
             return collected;
           },
