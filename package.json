@@ -1,10 +1,10 @@
 {
-  "name": "toolpact",
+  "name": "sponsio",
   "version": "0.1.0",
   "description": "Contract testing for agent tools. Snapshot the tools a page exposes to AI agents, diff them against a committed baseline, and fail CI when the contract breaks.",
   "type": "module",
   "bin": {
-    "toolpact": "./dist/cli.js"
+    "sponsio": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

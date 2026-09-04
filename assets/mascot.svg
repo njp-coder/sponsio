@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Sponsio mascot: an alert guard goose wearing a wax seal">
+  <defs>
+    <clipPath id="disc"><circle cx="120" cy="120" r="116"/></clipPath>
+  </defs>
+
+  <circle cx="120" cy="120" r="116" fill="#1b3557"/>
+
+  <g clip-path="url(#disc)">
+    <ellipse cx="112" cy="216" rx="70" ry="13" fill="#142943"/>
+
+    <!-- feet, drawn first so the body overlaps their tops -->
+    <path d="M94 194 C92 204 85 212 79 216 C84 219 90 218 94 215 C98 218 104 219 109 216
+             C103 212 96 204 94 194 Z" fill="#e07f2e"/>
+    <path d="M128 194 C126 204 119 212 113 216 C118 219 124 218 128 215 C132 218 138 219 143 216
+             C137 212 130 204 128 194 Z" fill="#f0913c"/>
+
+    <!-- body: one mass, tail tapering out of the back rather than stuck on -->
+    <path d="M32 128 C60 134 96 137 124 142 C146 147 158 161 158 178
+             C158 199 134 213 106 213 C76 213 52 200 46 181
+             C41 166 39 146 32 128 Z" fill="#fbfcfd"/>
+
+    <!-- neck -->
+    <path d="M124 146 C113 116 123 88 141 72 C151 63 165 61 171 69
+             C159 74 151 86 149 100 C146 119 149 133 155 147 Z" fill="#fbfcfd"/>
+
+    <!-- head -->
+    <circle cx="167" cy="62" r="26" fill="#fbfcfd"/>
+
+    <!-- beak -->
+    <path d="M190 51 C203 54 212 58 216 63 C211 68 202 72 190 75 C187 67 187 59 190 51 Z" fill="#f0913c"/>
+    <path d="M210 61 C213 61 215 62 216 63 C215 64 213 65 210 65 Z" fill="#c96f24"/>
+
+    <!-- folded wing with a feathered trailing edge -->
+    <path d="M62 152 C80 141 112 144 133 161 C127 168 119 173 110 176
+             C106 172 102 172 98 176 C94 172 90 172 86 176
+             C82 172 78 172 74 175 C67 170 62 162 62 152 Z" fill="#e4ecf4"/>
+    <path d="M80 158 C94 153 110 156 122 163" stroke="#cbd8e6" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <path d="M76 166 C88 162 100 164 110 169" stroke="#cbd8e6" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+
+    <!-- eye, with the eyebrow that makes it look on guard -->
+    <circle cx="174" cy="56" r="5.2" fill="#16202e"/>
+    <circle cx="175.6" cy="54.2" r="1.7" fill="#ffffff"/>
+    <path d="M165 43 C171 40 179 41 184 45" stroke="#16202e" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+
+    <!-- wax seal on a cord: the sealed promise the name refers to -->
+    <path d="M136 100 C142 109 152 112 158 110" stroke="#c9a227" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+    <g>
+      <circle cx="150" cy="124" r="14.5" fill="#b8392f"/>
+      <circle cx="164.5" cy="124" r="4.4" fill="#b8392f"/>
+      <circle cx="157.2" cy="136.6" r="4.4" fill="#b8392f"/>
+      <circle cx="142.8" cy="136.6" r="4.4" fill="#b8392f"/>
+      <circle cx="135.5" cy="124" r="4.4" fill="#b8392f"/>
+      <circle cx="142.8" cy="111.4" r="4.4" fill="#b8392f"/>
+      <circle cx="157.2" cy="111.4" r="4.4" fill="#b8392f"/>
+      <circle cx="150" cy="124" r="14.5" fill="#c8443a"/>
+      <path d="M143.5 124.5 L148.2 129.4 L157 118.6" stroke="#fce8e0" stroke-width="3.4" fill="none"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

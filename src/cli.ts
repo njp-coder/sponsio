@@ -2,15 +2,15 @@
 import { readFile, writeFile, appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Command } from "commander";
-import { capture, ToolpactError } from "./capture.js";
+import { capture, SponsioError } from "./capture.js";
 import { diffSnapshots, shouldFail, type FailOn } from "./diff.js";
 import { renderConsole, renderMarkdown } from "./report.js";
 import type { Snapshot } from "./types.js";
 
-const DEFAULT_BASELINE = "toolpact.baseline.json";
+const DEFAULT_BASELINE = "sponsio.baseline.json";
 
 const program = new Command()
-  .name("toolpact")
+  .name("sponsio")
   .description("Contract testing for the tools your site exposes to AI agents")
   .version("0.1.0");
 
@@ -129,7 +129,7 @@ async function readSnapshot(path: string): Promise<Snapshot> {
   try {
     raw = await readFile(path, "utf8");
   } catch {
-    fail(`No baseline at ${path}. Record one first:\n  toolpact snapshot <url> -o ${path}`);
+    fail(`No baseline at ${path}. Record one first:\n  sponsio snapshot <url> -o ${path}`);
   }
   let parsed: unknown;
   try {
@@ -140,10 +140,10 @@ async function readSnapshot(path: string): Promise<Snapshot> {
   if (
     typeof parsed !== "object" ||
     parsed === null ||
-    (parsed as Snapshot).toolpact !== 1 ||
+    (parsed as Snapshot).sponsio !== 1 ||
     !Array.isArray((parsed as Snapshot).tools)
   ) {
-    fail(`${path} is not a toolpact snapshot.`);
+    fail(`${path} is not a sponsio snapshot.`);
   }
   return parsed as Snapshot;
 }
@@ -161,7 +161,7 @@ async function run<T>(task: () => Promise<T>): Promise<T> {
   try {
     return await task();
   } catch (error) {
-    if (error instanceof ToolpactError) fail(error.message);
+    if (error instanceof SponsioError) fail(error.message);
     throw error;
   }
 }

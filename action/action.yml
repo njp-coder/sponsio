@@ -1,4 +1,4 @@
-name: "toolpact"
+name: "sponsio"
 description: "Fail the build when your site's agent tool contract breaks."
 branding:
   icon: "shield"
@@ -11,7 +11,7 @@ inputs:
   baseline:
     description: "Committed baseline snapshot to compare against."
     required: false
-    default: "toolpact.baseline.json"
+    default: "sponsio.baseline.json"
   fail-on:
     description: "breaking | warning | any | never"
     required: false
@@ -21,7 +21,7 @@ inputs:
     required: false
     default: "400"
   version:
-    description: "toolpact version to run."
+    description: "sponsio version to run."
     required: false
     default: "latest"
 
@@ -31,7 +31,7 @@ runs:
     - name: Check agent tool contract
       shell: bash
       run: |
-        npx --yes toolpact@${{ inputs.version }} check "${{ inputs.url }}" \
+        npx --yes sponsio@${{ inputs.version }} check "${{ inputs.url }}" \
           --baseline "${{ inputs.baseline }}" \
           --fail-on "${{ inputs.fail-on }}" \
           --settle "${{ inputs.settle }}"

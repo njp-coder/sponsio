@@ -55,9 +55,9 @@ export async function capture(options: CaptureOptions): Promise<Snapshot> {
     const page = await browser.newPage();
     const webmcp = (page as { webmcp?: PuppeteerWebMcp }).webmcp;
     if (!webmcp) {
-      throw new ToolpactError(
+      throw new SponsioError(
         "This Chrome build has no WebMCP support.\n" +
-          "toolpact needs Chrome 151 or newer (Puppeteer's `page.webmcp`).\n" +
+          "sponsio needs Chrome 151 or newer (Puppeteer's `page.webmcp`).\n" +
           "Pass --executable-path to point at a newer Chrome.",
       );
     }
@@ -80,7 +80,7 @@ export async function capture(options: CaptureOptions): Promise<Snapshot> {
     tools.sort((a, b) => a.name.localeCompare(b.name));
 
     return {
-      toolpact: 1,
+      sponsio: 1,
       url: options.url,
       capturedAt: new Date().toISOString(),
       userAgent: await browser.version(),
@@ -138,12 +138,12 @@ function assertSecureContext(url: string): void {
   try {
     parsed = new URL(url);
   } catch {
-    throw new ToolpactError(`Not a valid URL: ${url}`);
+    throw new SponsioError(`Not a valid URL: ${url}`);
   }
   const host = parsed.hostname;
   const isLocal = host === "localhost" || host === "127.0.0.1" || host === "[::1]";
   if (parsed.protocol !== "https:" && !isLocal) {
-    throw new ToolpactError(
+    throw new SponsioError(
       `WebMCP only runs in a secure context, so ${url} will register no tools.\n` +
         "Use https, or serve on localhost.",
     );
@@ -157,7 +157,7 @@ async function loadPuppeteer(): Promise<PuppeteerModule> {
   try {
     return (await import(specifier)) as unknown as PuppeteerModule;
   } catch {
-    throw new ToolpactError(
+    throw new SponsioError(
       "puppeteer is required to capture from a live page.\n  npm install puppeteer",
     );
   }
@@ -167,8 +167,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export class ToolpactError extends Error {
-  override name = "ToolpactError";
+export class SponsioError extends Error {
+  override name = "SponsioError";
 }
 
 // Minimal structural types for the bits of Puppeteer we touch, so the package

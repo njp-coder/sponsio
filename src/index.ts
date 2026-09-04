@@ -1,4 +1,4 @@
-export { capture, ToolpactError, WEBMCP_LAUNCH_ARGS } from "./capture.js";
+export { capture, SponsioError, WEBMCP_LAUNCH_ARGS } from "./capture.js";
 export type { CaptureOptions } from "./capture.js";
 export { diffSnapshots, shouldFail, summarize } from "./diff.js";
 export type { FailOn } from "./diff.js";

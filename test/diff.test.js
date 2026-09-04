@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { diffSnapshots, shouldFail } from "../dist/index.js";
 
 const snapshot = (tools) => ({
-  toolpact: 1,
+  sponsio: 1,
   url: "https://shop.example",
   capturedAt: "2026-09-05T00:00:00.000Z",
   tools,

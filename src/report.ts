@@ -55,12 +55,12 @@ function summaryLine(result: DiffResult): string {
 /** GitHub-flavoured markdown, sized for a PR comment or a step summary. */
 export function renderMarkdown(result: DiffResult, url: string): string {
   if (result.clean) {
-    return `### toolpact\n\n✅ No contract changes for \`${url}\`.\n`;
+    return `### sponsio\n\n✅ No contract changes for \`${url}\`.\n`;
   }
 
   const icon: Record<Severity, string> = { breaking: "🛑", warning: "⚠️", safe: "✅" };
   const lines = [
-    "### toolpact",
+    "### sponsio",
     "",
     `\`${url}\` — **${result.counts.breaking} breaking**, ` +
       `${result.counts.warning} warning, ${result.counts.safe} safe`,
@@ -80,7 +80,7 @@ export function renderMarkdown(result: DiffResult, url: string): string {
     lines.push(
       "",
       "> Breaking changes mean an agent mid-task against the old contract will fail. " +
-        "Re-record the baseline only once that is intended: `toolpact snapshot`.",
+        "Re-record the baseline only once that is intended: `sponsio snapshot`.",
     );
   }
   return lines.join("\n") + "\n";

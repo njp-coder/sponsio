@@ -38,7 +38,7 @@ export interface ToolRecord {
 }
 
 export interface Snapshot {
-  toolpact: 1;
+  sponsio: 1;
   url: string;
   capturedAt: string;
   userAgent?: string;
