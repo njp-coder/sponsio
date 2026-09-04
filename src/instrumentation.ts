@@ -45,10 +45,10 @@ export async function auditInstrumentation(
       code: "NO_AGENT_TELEMETRY",
       tool: "(page)",
       message:
-        `None of the ${candidates.length} tool(s) called here recorded anything to ` +
-        `analytics. Agent conversions will appear with no funnel behind them, and ` +
-        `you will not be able to tell agent traffic from human traffic. Emit an ` +
-        `event inside execute(), and read \`SubmitEvent.agentInvoked\` on declarative forms.`,
+        `None of the ${candidates.length} tool(s) called here emitted a browser-side ` +
+        `analytics event, so agent conversions will arrive with no funnel behind them. ` +
+        `Emit one inside execute(), and read \`SubmitEvent.agentInvoked\` on declarative ` +
+        `forms. (If you record these server-side, this check cannot see it — ignore.)`,
     });
   } else if (silent.length > 0) {
     findings.push({
@@ -56,8 +56,9 @@ export async function auditInstrumentation(
       code: "PARTIAL_AGENT_TELEMETRY",
       tool: "(page)",
       message:
-        `${observed} of ${candidates.length} tools emit analytics; ` +
-        `${silent.join(", ")} record nothing, so those steps are missing from any funnel.`,
+        `${observed} of ${candidates.length} tools emit a browser-side analytics event; ` +
+        `${silent.join(", ")} emit none, so those steps are missing from any funnel ` +
+        `built on them. Server-side tracking is invisible to this check.`,
     });
   }
 
