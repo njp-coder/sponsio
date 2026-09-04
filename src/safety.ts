@@ -1,6 +1,6 @@
 import { summarize } from "./diff.js";
 import type { DiffResult, Finding, JsonSchema, Snapshot, ToolRecord } from "./types.js";
-import { effectOf, isPropagating } from "./reversibility.js";
+import { effectOf, isPropagating, parseName } from "./reversibility.js";
 
 /**
  * Safety properties you can read straight off the tool surface, without
@@ -24,6 +24,9 @@ export function auditSafety(snapshot: Snapshot): DiffResult {
     checkPropagation(tool, findings);
     checkBlastRadius(tool, findings);
     checkPrivilegeEscalation(tool, findings);
+    checkDataEgress(tool, findings);
+    checkCallerChosenSubject(tool, findings);
+    checkLongRunning(tool, snapshot, findings);
   }
 
   return summarize(findings);
@@ -223,6 +226,133 @@ function checkPrivilegeEscalation(tool: ToolRecord, findings: Finding[]): void {
 
 const PRIVILEGE =
   /\b(grant|revoke|permission|role|api[_\s]?key|token|credential|invite[_\s]?admin|add[_\s]?member|access[_\s]?control|scope|webhook)\b/i;
+
+/**
+ * Read-only is not the same as harmless.
+ *
+ * A tool that reads is safe to retry and safe to undo, which is why the
+ * reversibility audit skips it — but `export_all_customers` is read-only and
+ * catastrophic. Bulk reads are the exfiltration surface of an agent-facing site,
+ * and an unbounded page size is what turns one call into the whole database.
+ */
+function checkDataEgress(tool: ToolRecord, findings: Finding[]): void {
+  if (!BULK_READ.test(tool.name.replace(/[_-]/g, " "))) return;
+
+  const properties = tool.inputSchema ? walk(tool.inputSchema) : [];
+  const pager = properties.find(({ name }) => PAGE_SIZE.test(name));
+  const bounded = pager && typeof pager.schema.maximum === "number";
+  if (bounded) return;
+
+  findings.push({
+    severity: "warning",
+    code: "UNBOUNDED_DATA_EGRESS",
+    tool: tool.name,
+    ...(pager ? { path: pager.path } : {}),
+    message: pager
+      ? `Bulk read whose \`${pager.name}\` has no maximum, so one call can return ` +
+        `everything. Cap it — read-only does not mean harmless at volume.`
+      : `Bulk read with no page-size parameter, so an agent cannot ask for less ` +
+        `than everything. Add a bounded \`limit\`.`,
+  });
+}
+
+const BULK_READ = /\b(export|download|dump|list|all|bulk|batch|search|query|fetch|scrape|extract)\b/i;
+const PAGE_SIZE = /^(limit|page[_\s]?size|per[_\s]?page|count|max[_\s]?results|top|first|take)$/i;
+
+/**
+ * When the caller supplies the subject, the caller chooses the victim.
+ *
+ * A tool taking `user_id` as an argument lets the agent name whose record it
+ * touches, and a model that has been prompt-injected or has simply confused two
+ * customers will happily pass the wrong one. Derive the subject from the
+ * authenticated session instead.
+ */
+function checkCallerChosenSubject(tool: ToolRecord, findings: Finding[]): void {
+  if (!tool.inputSchema) return;
+
+  for (const { path, name } of walk(tool.inputSchema)) {
+    if (!SUBJECT_ID.test(name)) continue;
+
+    const mutating = effectOf(tool) !== "read";
+    findings.push({
+      severity: mutating ? "breaking" : "warning",
+      code: "CALLER_CHOSEN_SUBJECT",
+      tool: tool.name,
+      path,
+      message:
+        `The agent picks whose record this touches by passing \`${name}\`. ` +
+        `Derive it from the authenticated session — a confused or injected model ` +
+        `will pass someone else's.`,
+    });
+    return;
+  }
+}
+
+const SUBJECT_ID =
+  /^(user|customer|account|member|owner|org|organisation|organization|tenant|patient|client)[_-]?id$/i;
+
+/**
+ * If a tool starts work rather than finishing it, an agent needs a way to learn
+ * how it went and a way to call it off.
+ *
+ * This is the shape of every site that offers a *service* rather than a
+ * transaction — rendering, analysis, tutoring, data processing. Without a
+ * companion status or cancel tool the agent has started something it can
+ * neither observe nor stop, and its only recourse is to call it again.
+ */
+function checkLongRunning(tool: ToolRecord, snapshot: Snapshot, findings: Finding[]): void {
+  const parsed = parseName(tool.name);
+  if (!ASYNC_VERBS.has(parsed.verb)) return;
+
+  const companions = snapshot.tools.filter((other) => other.name !== tool.name);
+  const hasObserver = companions.some((other) => {
+    const candidate = parseName(other.name);
+    return (
+      (OBSERVE_VERBS.has(candidate.verb) || OBSERVE_OBJECTS.test(other.name)) &&
+      sharesSubject(candidate.object, parsed.object)
+    );
+  });
+  const hasCancel = companions.some((other) => {
+    const candidate = parseName(other.name);
+    return CANCEL_VERBS.has(candidate.verb) && sharesSubject(candidate.object, parsed.object);
+  });
+
+  if (hasObserver && hasCancel) return;
+
+  const missing = [!hasObserver ? "check progress" : null, !hasCancel ? "cancel it" : null]
+    .filter(Boolean)
+    .join(" or ");
+
+  findings.push({
+    severity: "warning",
+    code: "UNOBSERVABLE_WORK",
+    tool: tool.name,
+    message:
+      `Starts work an agent cannot ${missing}. Long-running tools need a status ` +
+      `and a cancel counterpart, or the agent's only recourse when it hears ` +
+      `nothing back is to call this again.`,
+  });
+}
+
+const ASYNC_VERBS = new Set([
+  "generate", "render", "process", "train", "analyze", "analyse", "compile",
+  "build", "transcribe", "translate", "convert", "import", "sync", "index",
+  "crawl", "scan", "compute", "simulate", "evaluate", "summarize", "summarise",
+]);
+const OBSERVE_VERBS = new Set(["get", "check", "poll", "status", "watch", "read", "fetch"]);
+const CANCEL_VERBS = new Set(["cancel", "abort", "stop", "kill", "terminate"]);
+const OBSERVE_OBJECTS = /\b(status|progress|state|result|job)\b/i;
+
+/**
+ * Two tools refer to the same work if either object contains the other, or if
+ * one of them is generic — `get_job_status` covers every job on the page.
+ */
+function sharesSubject(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a !== "" && b !== "" && (a.includes(b) || b.includes(a))) return true;
+  // Underscore is a word character, so \bjob\b would miss `job_status`.
+  return /\b(job|task|run|request|operation)\b/.test(a.replace(/[_-]/g, " "));
+}
 
 /** Every named property in a schema, including nested ones and array elements. */
 function walk(

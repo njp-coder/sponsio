@@ -88,14 +88,14 @@ function classify(tool: ToolRecord, parsed: ParsedName): Effect {
   return "read";
 }
 
-interface ParsedName {
+export interface ParsedName {
   raw: string;
   verb: string;
   object: string;
 }
 
 /** `add_to_cart` → verb `add`, object `cart`; `createOrder` → `create`, `order`. */
-function parseName(name: string): ParsedName {
+export function parseName(name: string): ParsedName {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .split(/[^A-Za-z0-9]+/)
