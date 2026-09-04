@@ -124,7 +124,7 @@ sponsio diff before.json after.json                      # offline, no browser
 
 ## Making agent activity visible
 
-The audit tells you when none of your tools emit any telemetry. [`@sponsio/telemetry`](./telemetry) is the fix — a zero-dependency browser shim that sends every agent tool call to the analytics you already run (GA4, GTM, PostHog, Segment, Mixpanel), covering both imperative tools and the declarative form tools most instrumentation misses.
+The audit tells you when none of your tools emit any telemetry. [`@sponsio/telemetry`](https://github.com/sponsio/telemetry) is the fix — a zero-dependency browser shim that sends every agent tool call to the analytics you already run (GA4, GTM, PostHog, Segment, Mixpanel), covering both imperative tools and the declarative form tools most instrumentation misses.
 
 ```js
 import { instrument, dataLayer } from "@sponsio/telemetry";

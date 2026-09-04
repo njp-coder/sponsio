@@ -6,22 +6,15 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize } from "node:path";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const root = join(here, "demo-site");
-// The built telemetry package is served alongside the fixture so the demo can
-// import it exactly as a real site would.
-const telemetryRoot = join(here, "..", "telemetry", "dist");
+const root = join(dirname(fileURLToPath(import.meta.url)), "demo-site");
 const port = Number(process.argv[2] ?? 8787);
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 
 createServer(async (req, res) => {
   const path = normalize(new URL(req.url ?? "/", "http://localhost").pathname);
-  const telemetry = path.startsWith("/telemetry/");
-  const base = telemetry ? telemetryRoot : root;
-  const rel = telemetry ? path.slice("/telemetry".length) : path;
-  const file = join(base, rel.endsWith("/") ? `${rel}index.html` : rel);
-  if (!file.startsWith(base)) {
+  const file = join(root, path.endsWith("/") ? `${path}index.html` : path);
+  if (!file.startsWith(root)) {
     res.writeHead(403).end("Forbidden");
     return;
   }
