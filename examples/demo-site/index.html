@@ -103,6 +103,33 @@ if (!ctx) {
       },
       execute: async () => ({ content: [{ type: 'text', value: 'Order placed' }] }),
     },
+    // Deliberately unsafe, to exercise the audit: raw card details, no
+    // idempotency key, and an effect that leaves the system when it runs.
+    {
+      name: 'charge_card',
+      description: 'Charge a payment card for the order total',
+      annotations: { consequentialHint: true },
+      inputSchema: {
+        type: 'object',
+        properties: {
+          card_number: { type: 'string', description: 'Full card number' },
+          cvv: { type: 'string' },
+          amount: { type: 'number', minimum: 1 },
+        },
+        required: ['card_number', 'cvv', 'amount'],
+      },
+      execute: async () => ({ content: [{ type: 'text', value: 'Charged' }] }),
+    },
+    {
+      name: 'send_receipt',
+      description: 'Email the customer their receipt',
+      inputSchema: {
+        type: 'object',
+        properties: { email: { type: 'string' } },
+        required: ['email'],
+      },
+      execute: async () => ({ content: [{ type: 'text', value: 'Sent' }] }),
+    },
   ];
 
   Promise.all(tools.map(t => ctx.registerTool(t)))

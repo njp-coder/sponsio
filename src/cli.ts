@@ -2,17 +2,20 @@
 import { readFile, writeFile, appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Command } from "commander";
-import { capture, SponsioError } from "./capture.js";
-import { diffSnapshots, shouldFail, type FailOn } from "./diff.js";
+import { capture, withSession, SponsioError } from "./capture.js";
+import { diffSnapshots, shouldFail, summarize, type FailOn } from "./diff.js";
+import { auditReversibility } from "./reversibility.js";
+import { auditSafety } from "./safety.js";
+import { probeConformance } from "./conformance.js";
 import { renderConsole, renderMarkdown } from "./report.js";
-import type { Snapshot } from "./types.js";
+import type { DiffResult, Finding, Snapshot } from "./types.js";
 
 const DEFAULT_BASELINE = "sponsio.baseline.json";
 
 const program = new Command()
   .name("sponsio")
   .description("Contract testing for the tools your site exposes to AI agents")
-  .version("0.1.0");
+  .version("0.2.0");
 
 program
   .command("snapshot")
@@ -74,6 +77,64 @@ program
   });
 
 program
+  .command("audit")
+  .argument("<target>", "page to load, or a saved snapshot file")
+  .description("check whether agents can safely act here: reversibility, and schema enforcement")
+  .option("--probe", "also call each tool with input its own schema forbids")
+  .option("--probe-unsafe", "probe tools that are not declared readOnly (this really calls them)")
+  .option("--fail-on <level>", "breaking | warning | any | never", "breaking")
+  .option("--settle <ms>", "quiet period before reading tools", "400")
+  .option("--timeout <ms>", "hard ceiling on the wait", "10000")
+  .option("--executable-path <path>", "Chrome 151+ binary to use")
+  .option("--no-headless", "run with a visible browser")
+  .option("--json", "print findings as JSON")
+  .option("--markdown <file>", "also write a markdown report")
+  .action(async (target: string, options) => {
+    const wantsProbe = Boolean(options.probe || options.probeUnsafe);
+    let findings: Finding[];
+    let label = target;
+
+    if (!isUrl(target)) {
+      if (wantsProbe) {
+        fail("Probing needs a live page — pass a URL rather than a snapshot file.");
+      }
+      const snapshot = await readSnapshot(target);
+      label = snapshot.url;
+      findings = [
+        ...auditReversibility(snapshot).findings,
+        ...auditSafety(snapshot).findings,
+      ];
+    } else {
+      findings = await run(async () =>
+        withSession(
+          {
+            url: target,
+            settleMs: Number(options.settle),
+            timeoutMs: Number(options.timeout),
+            executablePath: options.executablePath,
+            headless: options.headless,
+          },
+          async (session) => {
+            const collected = [
+              ...auditReversibility(session.snapshot).findings,
+              ...auditSafety(session.snapshot).findings,
+            ];
+            if (wantsProbe) {
+              const probed = await probeConformance(session.tools, {
+                includeUnsafe: Boolean(options.probeUnsafe),
+              });
+              collected.push(...probed.findings);
+            }
+            return collected;
+          },
+        ),
+      );
+    }
+
+    await emit(summarize(findings), label, options);
+  });
+
+program
   .command("diff")
   .argument("<before>", "baseline snapshot file")
   .argument("<after>", "snapshot file to compare")
@@ -93,11 +154,11 @@ interface EmitOptions {
   failOn: string;
 }
 
-async function emit(
-  result: ReturnType<typeof diffSnapshots>,
-  url: string,
-  options: EmitOptions,
-): Promise<void> {
+function isUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+async function emit(result: DiffResult, url: string, options: EmitOptions): Promise<void> {
   if (options.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {

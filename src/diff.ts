@@ -157,14 +157,49 @@ function compareAnnotations(
   }
 }
 
+/** Carries the two root schemas so `$ref` can be resolved, plus loop protection. */
+interface SchemaContext {
+  beforeRoot: JsonSchema;
+  afterRoot: JsonSchema;
+  depth: number;
+  seen: Set<string>;
+}
+
+const MAX_DEPTH = 16;
+
 function compareSchema(
-  before: JsonSchema,
-  after: JsonSchema,
+  beforeRaw: JsonSchema,
+  afterRaw: JsonSchema,
   tool: string,
   path: string,
   findings: Finding[],
+  context?: SchemaContext,
 ): void {
   const at = path || "(root)";
+  const ctx: SchemaContext = context ?? {
+    beforeRoot: beforeRaw,
+    afterRoot: afterRaw,
+    depth: 0,
+    seen: new Set(),
+  };
+
+  if (ctx.depth > MAX_DEPTH) return;
+
+  // A pair of $refs can point back at each other; visiting a pair twice means
+  // the structures recurse and there is nothing further to learn.
+  const refKey = `${String(beforeRaw.$ref ?? "")}|${String(afterRaw.$ref ?? "")}`;
+  if (refKey !== "|") {
+    if (ctx.seen.has(refKey)) return;
+    ctx.seen.add(refKey);
+  }
+
+  const before = resolveRef(beforeRaw, ctx.beforeRoot);
+  const after = resolveRef(afterRaw, ctx.afterRoot);
+  const next: SchemaContext = { ...ctx, depth: ctx.depth + 1 };
+
+  compareConst(before, after, tool, at, findings);
+  compareAdditionalProperties(before, after, tool, at, findings);
+  compareCombinators(before, after, tool, path, findings, next);
 
   const beforeType = normalizeType(before.type);
   const afterType = normalizeType(after.type);
@@ -234,7 +269,7 @@ function compareSchema(
         message: `No longer required.`,
       });
     }
-    compareSchema(beforeProp, afterProp, tool, childPath, findings);
+    compareSchema(beforeProp, afterProp, tool, childPath, findings, next);
   }
 
   for (const key of Object.keys(afterProps)) {
@@ -259,8 +294,218 @@ function compareSchema(
     }
   }
 
-  if (before.items && after.items) {
-    compareSchema(before.items, after.items, tool, join(path, "[]"), findings);
+  compareItems(before, after, tool, path, findings, next);
+}
+
+/**
+ * Arrays come in two shapes: a single schema every element must match, or a
+ * positional tuple (`prefixItems` in 2020-12, an array-valued `items` before
+ * that). Losing a tuple position rejects input that used to be accepted.
+ */
+function compareItems(
+  before: JsonSchema,
+  after: JsonSchema,
+  tool: string,
+  path: string,
+  findings: Finding[],
+  ctx: SchemaContext,
+): void {
+  const beforeTuple = tupleOf(before);
+  const afterTuple = tupleOf(after);
+
+  if (beforeTuple && afterTuple) {
+    const shared = Math.min(beforeTuple.length, afterTuple.length);
+    for (let index = 0; index < shared; index++) {
+      compareSchema(
+        beforeTuple[index]!,
+        afterTuple[index]!,
+        tool,
+        join(path, `[${index}]`),
+        findings,
+        ctx,
+      );
+    }
+    if (afterTuple.length < beforeTuple.length) {
+      findings.push({
+        severity: "breaking",
+        code: "TUPLE_SHORTENED",
+        tool,
+        path: path || "(root)",
+        message: `Tuple went from ${beforeTuple.length} to ${afterTuple.length} positions.`,
+      });
+    } else if (afterTuple.length > beforeTuple.length) {
+      findings.push({
+        severity: "safe",
+        code: "TUPLE_EXTENDED",
+        tool,
+        path: path || "(root)",
+        message: `Tuple gained ${afterTuple.length - beforeTuple.length} position(s).`,
+      });
+    }
+    return;
+  }
+
+  const beforeItems = singleItemSchema(before);
+  const afterItems = singleItemSchema(after);
+  if (beforeItems && afterItems) {
+    compareSchema(beforeItems, afterItems, tool, join(path, "[]"), findings, ctx);
+  }
+}
+
+function tupleOf(schema: JsonSchema): JsonSchema[] | undefined {
+  if (Array.isArray(schema["prefixItems"])) return schema["prefixItems"] as JsonSchema[];
+  if (Array.isArray(schema.items)) return schema.items as unknown as JsonSchema[];
+  return undefined;
+}
+
+function singleItemSchema(schema: JsonSchema): JsonSchema | undefined {
+  return schema.items && !Array.isArray(schema.items) ? schema.items : undefined;
+}
+
+/** Resolves a local `#/...` pointer. Remote refs are left alone. */
+function resolveRef(schema: JsonSchema, root: JsonSchema): JsonSchema {
+  const ref = schema.$ref;
+  if (typeof ref !== "string" || !ref.startsWith("#")) return schema;
+
+  const segments = ref
+    .slice(1)
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
+
+  let current: unknown = root;
+  for (const segment of segments) {
+    if (typeof current !== "object" || current === null) return schema;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return typeof current === "object" && current !== null ? (current as JsonSchema) : schema;
+}
+
+function compareConst(
+  before: JsonSchema,
+  after: JsonSchema,
+  tool: string,
+  path: string,
+  findings: Finding[],
+): void {
+  const b = before["const"];
+  const a = after["const"];
+  if (b === undefined && a === undefined) return;
+  if (JSON.stringify(b) === JSON.stringify(a)) return;
+
+  if (a === undefined) {
+    findings.push({
+      severity: "safe",
+      code: "CONST_REMOVED",
+      tool,
+      path,
+      message: `Fixed value constraint removed.`,
+    });
+  } else {
+    findings.push({
+      severity: "breaking",
+      code: b === undefined ? "CONST_ADDED" : "CONST_CHANGED",
+      tool,
+      path,
+      message:
+        b === undefined
+          ? `Now pinned to ${render(a)}; any other value is rejected.`
+          : `Fixed value changed from ${render(b)} to ${render(a)}.`,
+    });
+  }
+}
+
+function compareAdditionalProperties(
+  before: JsonSchema,
+  after: JsonSchema,
+  tool: string,
+  path: string,
+  findings: Finding[],
+): void {
+  // Absent means permitted, so only an explicit `false` closes the object.
+  const wasClosed = before.additionalProperties === false;
+  const isClosed = after.additionalProperties === false;
+  if (wasClosed === isClosed) return;
+
+  findings.push(
+    isClosed
+      ? {
+          severity: "breaking",
+          code: "ADDITIONAL_PROPERTIES_CLOSED",
+          tool,
+          path,
+          message: `Extra properties are now rejected; agents sending any will fail.`,
+        }
+      : {
+          severity: "safe",
+          code: "ADDITIONAL_PROPERTIES_OPENED",
+          tool,
+          path,
+          message: `Extra properties are now accepted.`,
+        },
+  );
+}
+
+type Combinator = "oneOf" | "anyOf" | "allOf";
+const COMBINATORS: Combinator[] = ["oneOf", "anyOf", "allOf"];
+
+/**
+ * For `oneOf`/`anyOf`, branches are alternatives: fewer of them accepts less.
+ * For `allOf`, branches are conjoined requirements: more of them accepts less.
+ */
+function compareCombinators(
+  before: JsonSchema,
+  after: JsonSchema,
+  tool: string,
+  path: string,
+  findings: Finding[],
+  ctx: SchemaContext,
+): void {
+  for (const keyword of COMBINATORS) {
+    const b = before[keyword];
+    const a = after[keyword];
+    if (!Array.isArray(b) && !Array.isArray(a)) continue;
+
+    const beforeBranches = (Array.isArray(b) ? b : []) as JsonSchema[];
+    const afterBranches = (Array.isArray(a) ? a : []) as JsonSchema[];
+    const at = path || "(root)";
+
+    const narrowsWhenFewer = keyword !== "allOf";
+    const delta = afterBranches.length - beforeBranches.length;
+
+    if (delta < 0) {
+      findings.push({
+        severity: narrowsWhenFewer ? "breaking" : "safe",
+        code: "COMBINATOR_BRANCH_REMOVED",
+        tool,
+        path: at,
+        message: narrowsWhenFewer
+          ? `${keyword} lost ${-delta} alternative(s); input matching them is now rejected.`
+          : `${keyword} dropped ${-delta} requirement(s).`,
+      });
+    } else if (delta > 0) {
+      findings.push({
+        severity: narrowsWhenFewer ? "safe" : "breaking",
+        code: "COMBINATOR_BRANCH_ADDED",
+        tool,
+        path: at,
+        message: narrowsWhenFewer
+          ? `${keyword} gained ${delta} alternative(s).`
+          : `${keyword} added ${delta} requirement(s); previously-valid input may now fail.`,
+      });
+    }
+
+    const shared = Math.min(beforeBranches.length, afterBranches.length);
+    for (let index = 0; index < shared; index++) {
+      compareSchema(
+        beforeBranches[index]!,
+        afterBranches[index]!,
+        tool,
+        join(path, `${keyword}[${index}]`),
+        findings,
+        ctx,
+      );
+    }
   }
 }
 
@@ -395,13 +640,31 @@ function render(value: unknown): string {
   return typeof value === "string" ? `"${value}"` : JSON.stringify(value);
 }
 
+const SEVERITY_ORDER: Record<Severity, number> = { breaking: 0, warning: 1, safe: 2 };
+
+/**
+ * Group findings by tool, worst-affected tool first, and worst finding first
+ * within each tool — so a reader sees every problem with one tool together,
+ * and still meets the most serious tool at the top.
+ */
 export function summarize(findings: Finding[]): DiffResult {
   const counts: Record<Severity, number> = { breaking: 0, warning: 0, safe: 0 };
-  for (const finding of findings) counts[finding.severity]++;
-  const order: Record<Severity, number> = { breaking: 0, warning: 1, safe: 2 };
+  const worstByTool = new Map<string, number>();
+
+  for (const finding of findings) {
+    counts[finding.severity]++;
+    const rank = SEVERITY_ORDER[finding.severity];
+    const current = worstByTool.get(finding.tool);
+    if (current === undefined || rank < current) worstByTool.set(finding.tool, rank);
+  }
+
   const sorted = [...findings].sort(
-    (a, b) => order[a.severity] - order[b.severity] || a.tool.localeCompare(b.tool),
+    (a, b) =>
+      worstByTool.get(a.tool)! - worstByTool.get(b.tool)! ||
+      a.tool.localeCompare(b.tool) ||
+      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity],
   );
+
   return { findings: sorted, counts, clean: findings.length === 0 };
 }
 

@@ -1,10 +1,15 @@
 /** A loose JSON Schema view — only the keywords that affect an agent's ability to call a tool. */
 export interface JsonSchema {
+  $ref?: string;
   type?: string | string[];
   properties?: Record<string, JsonSchema>;
   required?: string[];
   enum?: unknown[];
   items?: JsonSchema;
+  prefixItems?: JsonSchema[];
+  oneOf?: JsonSchema[];
+  anyOf?: JsonSchema[];
+  allOf?: JsonSchema[];
   description?: string;
   minimum?: number;
   maximum?: number;

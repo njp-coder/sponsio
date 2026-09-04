@@ -30,6 +30,22 @@ export const WEBMCP_LAUNCH_ARGS = [
   "--disable-setuid-sandbox",
 ];
 
+export interface InvocationResult {
+  status: "Completed" | "Canceled" | "Error";
+  output?: unknown;
+  errorText?: string;
+}
+
+/** A captured tool that can still be called, for as long as the session is open. */
+export interface LiveTool extends ToolRecord {
+  execute(args: unknown): Promise<InvocationResult>;
+}
+
+export interface Session {
+  snapshot: Snapshot;
+  tools: LiveTool[];
+}
+
 /**
  * Load a page in Chrome and record every tool it exposes to agents.
  *
@@ -39,6 +55,18 @@ export const WEBMCP_LAUNCH_ARGS = [
  * job is to wait for late registrations to stop arriving.
  */
 export async function capture(options: CaptureOptions): Promise<Snapshot> {
+  return withSession(options, async (session) => session.snapshot);
+}
+
+/**
+ * Open a page, hand the caller its live tools, and tear the browser down
+ * afterwards. Tools stay callable only inside `fn` — conformance probing needs
+ * to invoke them, which a plain snapshot cannot support.
+ */
+export async function withSession<T>(
+  options: CaptureOptions,
+  fn: (session: Session) => Promise<T>,
+): Promise<T> {
   const settleMs = options.settleMs ?? DEFAULTS.settleMs;
   const timeoutMs = options.timeoutMs ?? DEFAULTS.timeoutMs;
 
@@ -76,19 +104,49 @@ export async function capture(options: CaptureOptions): Promise<Snapshot> {
       await sleep(50);
     }
 
-    const tools = await Promise.all(webmcp.tools().map(normalizeTool));
-    tools.sort((a, b) => a.name.localeCompare(b.name));
+    const raw = webmcp.tools();
+    const records = await Promise.all(raw.map(normalizeTool));
+    const tools: LiveTool[] = records
+      .map((record, index) => {
+        const source = raw[index]!;
+        return {
+          ...record,
+          execute: (args: unknown) => invoke(source, args),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    return {
+    const snapshot: Snapshot = {
       sponsio: 1,
       url: options.url,
       capturedAt: new Date().toISOString(),
       userAgent: await browser.version(),
-      tools,
+      tools: tools.map(stripExecute),
     };
+
+    return await fn({ snapshot, tools });
   } finally {
     await browser.close();
   }
+}
+
+async function invoke(source: RawTool, args: unknown): Promise<InvocationResult> {
+  if (typeof source.execute !== "function") {
+    return { status: "Error", errorText: "This build exposes no execute() for tools." };
+  }
+  try {
+    const result = (await source.execute(args)) as InvocationResult | undefined;
+    // Older builds resolve with a bare value rather than an invocation record.
+    if (result && typeof result === "object" && "status" in result) return result;
+    return { status: "Completed", output: result };
+  } catch (error) {
+    return { status: "Error", errorText: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function stripExecute(tool: LiveTool): ToolRecord {
+  const { execute: _execute, ...record } = tool;
+  return record;
 }
 
 /**
@@ -191,6 +249,7 @@ interface RawTool {
   backendNodeId?: number;
   /** Prototype getter: always a promise, resolving to null for imperative tools. */
   formElement?: Promise<unknown> | unknown;
+  execute?: (args: unknown) => Promise<unknown>;
 }
 
 interface PuppeteerWebMcp {

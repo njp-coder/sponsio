@@ -1,5 +1,10 @@
-export { capture, SponsioError, WEBMCP_LAUNCH_ARGS } from "./capture.js";
-export type { CaptureOptions } from "./capture.js";
+export { capture, withSession, SponsioError, WEBMCP_LAUNCH_ARGS } from "./capture.js";
+export type { CaptureOptions, InvocationResult, LiveTool, Session } from "./capture.js";
+export { auditReversibility, effectOf, isPropagating } from "./reversibility.js";
+export type { Effect } from "./reversibility.js";
+export { auditSafety } from "./safety.js";
+export { probeConformance, buildViolations, buildValidInput } from "./conformance.js";
+export type { ProbeOptions } from "./conformance.js";
 export { diffSnapshots, shouldFail, summarize } from "./diff.js";
 export type { FailOn } from "./diff.js";
 export { renderConsole, renderMarkdown } from "./report.js";

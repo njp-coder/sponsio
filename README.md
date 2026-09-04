@@ -42,6 +42,47 @@ Two of these classifications are deliberate and worth explaining.
 
 **Losing a safety hint is breaking.** A tool that drops `readOnly` now has side effects an agent was calling it speculatively without. A tool that drops `consequential` stops triggering the approval gates built on top of it. Nothing in the schema changed; the blast radius did.
 
+## Can agents safely act here?
+
+Diffing tells you what changed. `audit` tells you whether the surface was safe in the first place — no baseline needed.
+
+```bash
+npx sponsio audit https://shop.example
+```
+
+```
+charge_card
+  BREAKING Consequential action with no inverse. An agent can commit this and
+           has no tool to undo it. Expose a `refund_card` tool.
+  BREAKING Consequential action with no idempotency key in its schema. Agents
+           retry failed writes the way they retry reads, so this will
+           eventually run twice.
+  BREAKING card_number Schema asks the agent for raw card details. A model
+           should never be handed this — take a payment token from a hosted
+           field, never the number itself.
+   WARNING The effect leaves your system the moment it runs...
+```
+
+Four checks, each from a way agents actually fail:
+
+**Reversibility.** Every action an agent can take is matched against the tools that could undo it. A scan of live WebMCP sites found 97% of those that let an agent commit a purchase exposed no cancel, refund, or undo tool at all. `create_order` looks for `cancel_order`; `add_to_cart` looks for `remove_from_cart`; a general `undo` covers everything.
+
+**Idempotency.** Agents retry a failed write exactly the way they retry a read — the frameworks do it for you, and a timeout is indistinguishable from a failure. A consequential tool with no idempotency key in its schema will eventually run twice.
+
+**Sensitive parameters.** Whatever a schema asks for, the model will try to supply, from its context or by asking the user in chat. A tool whose schema takes a card number, CVV, password, or government ID is routing that data through a language model.
+
+**Effect escape.** Some actions have an inverse that doesn't actually undo them. A recalled message may already have been read; a refunded charge still moved money. Structural reversibility and real reversibility are different things, and only the first is visible in a schema.
+
+### Probing: does a tool honor its own schema?
+
+`inputSchema` is advisory. The browser hands it to the agent as guidance and validates nothing, and an independent scan found **78% of probes were accepted despite violating the tool's own declared schema** — on Google's own reference demos. So testing the declaration alone tests a document, not a system.
+
+```bash
+npx sponsio audit https://shop.example --probe
+```
+
+This calls each tool with input its schema forbids — a missing required field, a value outside an enum, a number past its maximum — and reports what gets accepted. Because probing really invokes tools, anything not declared `readOnly` is skipped unless you pass `--probe-unsafe`.
+
 ## CI
 
 ```yaml
