@@ -36,6 +36,8 @@ Most WebMCP instrumentation only wraps `registerTool`, which misses **declarativ
 
 The browser sets a read-only `agentInvoked` flag on the submit event — the one agent signal you get for free. This reads it, so both halves land in the same event stream with a `tool_kind` of `imperative` or `declarative`.
 
+One honest limit: for a declarative tool the browser hands us the submit and nothing after it, so `ok` means *an agent submitted this form* rather than *the server accepted it*, and `duration_ms` is always zero. Build funnels accordingly — usually by pairing the submit with whatever you already track on the resulting page.
+
 ## Arguments, and what it won't record
 
 By default it records the **shape** of the arguments, never their contents:

@@ -17,8 +17,15 @@ export interface ToolEvent {
   /** Tool name as registered, or the form's `toolname` for declarative tools. */
   tool: string;
   kind: ToolKind;
-  /** Milliseconds from invocation to settle. Zero for declarative submits, which we cannot time. */
+  /** Milliseconds from invocation to settle. Always zero for declarative submits, which we cannot time. */
   durationMs: number;
+  /**
+   * Whether the call completed without throwing.
+   *
+   * For declarative form tools this reports that an agent *submitted* the form,
+   * not what the server did with it — the browser gives us the submit event and
+   * nothing after it. Build funnels accordingly.
+   */
   ok: boolean;
   error?: string;
   /** Shapes or values, depending on `captureArguments`. Absent when "none". */
