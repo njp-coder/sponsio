@@ -136,3 +136,46 @@ test("purely local state changes do not escape", () => {
   );
   assert.equal(find(result, "EFFECT_ESCAPES"), undefined);
 });
+
+test("an unbounded money or quantity parameter is flagged", () => {
+  const result = auditSafety(
+    snapshot([charge({ type: "object", properties: { amount: { type: "number", minimum: 1 } } })]),
+  );
+  const finding = find(result, "UNBOUNDED_MAGNITUDE");
+  assert.equal(finding.severity, "warning");
+  assert.equal(finding.path, "amount");
+});
+
+test("a declared maximum clears it", () => {
+  const result = auditSafety(
+    snapshot([charge({ type: "object", properties: { amount: { type: "number", maximum: 500 } } })]),
+  );
+  assert.equal(find(result, "UNBOUNDED_MAGNITUDE"), undefined);
+});
+
+test("non-magnitude numbers are left alone", () => {
+  const result = auditSafety(
+    snapshot([charge({ type: "object", properties: { page: { type: "number" } } })]),
+  );
+  assert.equal(find(result, "UNBOUNDED_MAGNITUDE"), undefined);
+});
+
+test("a tool that grants access without the consequential hint is breaking", () => {
+  const result = auditSafety(
+    snapshot([{ name: "grant_role", inputSchema: { type: "object", properties: {} } }]),
+  );
+  assert.equal(find(result, "GRANTS_ACCESS").severity, "breaking");
+});
+
+test("declaring the hint downgrades it to a warning", () => {
+  const result = auditSafety(
+    snapshot([
+      {
+        name: "create_api_key",
+        annotations: { consequential: true },
+        inputSchema: { type: "object", properties: { idempotency_key: { type: "string" } } },
+      },
+    ]),
+  );
+  assert.equal(find(result, "GRANTS_ACCESS").severity, "warning");
+});

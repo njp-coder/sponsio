@@ -20,6 +20,8 @@ export function auditSafety(snapshot: Snapshot): DiffResult {
     checkIdempotency(tool, findings);
     checkSensitiveParameters(tool, findings);
     checkPropagation(tool, findings);
+    checkBlastRadius(tool, findings);
+    checkPrivilegeEscalation(tool, findings);
   }
 
   return summarize(findings);
@@ -124,6 +126,66 @@ function checkPropagation(tool: ToolRecord, findings: Finding[]): void {
       `gate this behind confirmation rather than relying on undo.`,
   });
 }
+
+/**
+ * A quantity with no ceiling is an unbounded blast radius.
+ *
+ * The most-read agent incident of 2026 was an operator waking to a $6,531 cloud
+ * bill after an agent looped on an error. A `maximum` in the schema is the one
+ * place a site can cap what a single call is allowed to cost, and it also tells
+ * the model what a sane value looks like.
+ */
+function checkBlastRadius(tool: ToolRecord, findings: Finding[]): void {
+  if (effectOf(tool) === "read") return;
+  if (!tool.inputSchema) return;
+
+  for (const { path, name, schema } of walk(tool.inputSchema)) {
+    const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
+    if (type !== "number" && type !== "integer") continue;
+    if (typeof schema.maximum === "number") continue;
+    if (!MAGNITUDE.test(name)) continue;
+
+    findings.push({
+      severity: "warning",
+      code: "UNBOUNDED_MAGNITUDE",
+      tool: tool.name,
+      path,
+      message:
+        `\`${name}\` has no maximum, so a single call has no ceiling. Declare one — ` +
+        `it caps the damage from a miscalculation and tells the model what is reasonable.`,
+    });
+  }
+}
+
+const MAGNITUDE =
+  /amount|price|total|cost|fee|quantity|qty|count|limit|size|duration|units|balance|value/i;
+
+/**
+ * Tools that hand out access are the ones an agent should never call
+ * unsupervised — a compromised or confused agent that can grant itself
+ * permissions turns a mistake into a persistent foothold.
+ */
+function checkPrivilegeEscalation(tool: ToolRecord, findings: Finding[]): void {
+  if (effectOf(tool) === "read") return;
+  // Underscore is a word character, so `\bgrant\b` would miss `grant_role`.
+  const haystack = `${tool.name} ${tool.description}`.replace(/[_-]/g, " ");
+  if (!PRIVILEGE.test(haystack)) return;
+
+  findings.push({
+    severity: tool.annotations?.consequential === true ? "warning" : "breaking",
+    code: "GRANTS_ACCESS",
+    tool: tool.name,
+    message:
+      tool.annotations?.consequential === true
+        ? `Grants access or credentials. Confirm your approval gate covers it — ` +
+          `an agent that can widen its own permissions can make a mistake permanent.`
+        : `Grants access or credentials but is not marked consequential, so agents ` +
+          `will call it without asking. Mark it, or move it out of the agent surface.`,
+  });
+}
+
+const PRIVILEGE =
+  /\b(grant|revoke|permission|role|api[_\s]?key|token|credential|invite[_\s]?admin|add[_\s]?member|access[_\s]?control|scope|webhook)\b/i;
 
 /** Every named property in a schema, including nested ones and array elements. */
 function walk(
