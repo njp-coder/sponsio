@@ -1,0 +1,55 @@
+{
+  "name": "toolpact",
+  "version": "0.1.0",
+  "description": "Contract testing for agent tools. Snapshot the tools a page exposes to AI agents, diff them against a committed baseline, and fail CI when the contract breaks.",
+  "type": "module",
+  "bin": {
+    "toolpact": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "npm run build && node --test test/*.test.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "webmcp",
+    "mcp",
+    "ai-agents",
+    "contract-testing",
+    "schema-drift",
+    "ci",
+    "model-context"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "peerDependencies": {
+    "puppeteer": ">=23"
+  },
+  "peerDependenciesMeta": {
+    "puppeteer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

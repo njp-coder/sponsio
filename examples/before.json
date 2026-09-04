@@ -1,0 +1,20 @@
+{
+  "toolpact": 1,
+  "url": "https://shop.example",
+  "capturedAt": "2026-09-01T10:00:00.000Z",
+  "tools": [
+    { "name": "search_products", "description": "Search the product catalog", "kind": "imperative",
+      "annotations": { "readOnly": true },
+      "inputSchema": { "type": "object",
+        "properties": { "query": { "type": "string" },
+          "pillar": { "type": "string", "enum": ["home", "garden", "toys"] } },
+        "required": ["query"] } },
+    { "name": "add_to_cart", "description": "Add a product to the cart", "kind": "imperative",
+      "inputSchema": { "type": "object",
+        "properties": { "product_id": { "type": "string" }, "quantity": { "type": "number" } },
+        "required": ["product_id"] } },
+    { "name": "checkout", "description": "Begin checkout", "kind": "declarative",
+      "annotations": { "consequential": true },
+      "inputSchema": { "type": "object", "properties": {} } }
+  ]
+}

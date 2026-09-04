@@ -1,0 +1,37 @@
+name: "toolpact"
+description: "Fail the build when your site's agent tool contract breaks."
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  url:
+    description: "Page to check (https, or a localhost URL served by an earlier step)."
+    required: true
+  baseline:
+    description: "Committed baseline snapshot to compare against."
+    required: false
+    default: "toolpact.baseline.json"
+  fail-on:
+    description: "breaking | warning | any | never"
+    required: false
+    default: "breaking"
+  settle:
+    description: "Quiet period, in ms, before reading the registered tools."
+    required: false
+    default: "400"
+  version:
+    description: "toolpact version to run."
+    required: false
+    default: "latest"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check agent tool contract
+      shell: bash
+      run: |
+        npx --yes toolpact@${{ inputs.version }} check "${{ inputs.url }}" \
+          --baseline "${{ inputs.baseline }}" \
+          --fail-on "${{ inputs.fail-on }}" \
+          --settle "${{ inputs.settle }}"
