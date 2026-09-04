@@ -1,0 +1,118 @@
+{
+  "toolpact": 1,
+  "url": "http://localhost:8787",
+  "capturedAt": "2026-09-04T19:59:15.279Z",
+  "userAgent": "Chrome/152.0.7977.77",
+  "tools": [
+    {
+      "name": "add_to_cart",
+      "description": "Add a product to the shopping cart",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "product_id"
+        ]
+      },
+      "kind": "imperative"
+    },
+    {
+      "name": "checkout",
+      "description": "Place the order for everything in the cart",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "annotations": {
+        "readOnly": false,
+        "untrustedContent": false
+      },
+      "kind": "imperative"
+    },
+    {
+      "name": "search_products",
+      "description": "Search the product catalog",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Free text search"
+          },
+          "pillar": {
+            "type": "string",
+            "enum": [
+              "home",
+              "garden",
+              "toys"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "annotations": {
+        "readOnly": true,
+        "untrustedContent": false
+      },
+      "kind": "imperative"
+    },
+    {
+      "name": "subscribe_newsletter",
+      "description": "Subscribe an email address to the newsletter",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address to subscribe"
+          },
+          "frequency": {
+            "type": "string",
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "daily",
+                "title": "Daily"
+              },
+              {
+                "type": "string",
+                "const": "weekly",
+                "title": "Weekly"
+              }
+            ],
+            "enum": [
+              "daily",
+              "weekly"
+            ],
+            "description": "How often to send"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "annotations": {
+        "autosubmit": true
+      },
+      "kind": "declarative"
+    }
+  ]
+}

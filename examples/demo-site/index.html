@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Demo Shop — WebMCP test fixture</title>
+<style>
+  body { font: 16px/1.6 system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  code { background: #f2f2f0; padding: 1px 5px; border-radius: 3px; }
+  ul { padding-left: 1.2rem; }
+  form { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-top: 1.5rem; }
+  label { display: block; margin: .5rem 0; }
+  #status { color: #666; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Demo Shop</h1>
+<p>A fixture page that registers WebMCP tools, so the CLI can be tested without a live site.</p>
+<p id="status">Registering tools…</p>
+<ul id="tools"></ul>
+
+<!-- Declarative tool: the browser synthesizes a tool from this annotated form. -->
+<form toolname="subscribe_newsletter"
+      tooldescription="Subscribe an email address to the newsletter"
+      toolautosubmit
+      onsubmit="event.preventDefault()">
+  <strong>Newsletter</strong>
+  <label>Email <input name="email" type="email" required
+    toolparamdescription="Email address to subscribe"></label>
+  <label>Frequency
+    <select name="frequency" toolparamdescription="How often to send">
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+    </select>
+  </label>
+  <button type="submit">Subscribe</button>
+</form>
+
+<script>
+const ctx = document.modelContext ?? navigator.modelContext;
+const status = document.getElementById('status');
+
+// Append ?v=2 to serve a deliberately regressed contract: an enum value is
+// dropped, a required parameter appears, the readOnly hint is lost, and the
+// description is reworded. Used to demonstrate what the checker catches.
+const v2 = new URLSearchParams(location.search).get('v') === '2';
+
+if (!ctx) {
+  status.textContent = 'No WebMCP support in this browser. Launch Chrome with --enable-features=WebMCP.';
+} else {
+  const catalog = [
+    { id: 'p1', name: 'Cast iron pan', pillar: 'home' },
+    { id: 'p2', name: 'Pruning shears', pillar: 'garden' },
+    { id: 'p3', name: 'Wooden train set', pillar: 'toys' },
+  ];
+  const cart = [];
+
+  const tools = [
+    {
+      name: 'search_products',
+      description: v2 ? 'Find items in the store' : 'Search the product catalog',
+      annotations: { readOnlyHint: !v2 },
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Free text search' },
+          pillar: { type: 'string', enum: v2 ? ['home', 'garden'] : ['home', 'garden', 'toys'] },
+          ...(v2 ? { locale: { type: 'string' } } : {}),
+        },
+        required: v2 ? ['query', 'locale'] : ['query'],
+      },
+      execute: async ({ query, pillar }) => {
+        const hits = catalog.filter(p =>
+          p.name.toLowerCase().includes(String(query ?? '').toLowerCase()) &&
+          (!pillar || p.pillar === pillar));
+        return { content: [{ type: 'text', value: JSON.stringify(hits) }] };
+      },
+    },
+    {
+      name: 'add_to_cart',
+      description: 'Add a product to the shopping cart',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          product_id: { type: 'string' },
+          quantity: { type: 'number', minimum: 1, maximum: 10 },
+        },
+        required: ['product_id'],
+      },
+      execute: async ({ product_id, quantity = 1 }) => {
+        cart.push({ product_id, quantity });
+        return { content: [{ type: 'text', value: `Cart has ${cart.length} line(s)` }] };
+      },
+    },
+    {
+      name: 'checkout',
+      description: 'Place the order for everything in the cart',
+      annotations: { consequentialHint: true },
+      inputSchema: {
+        type: 'object',
+        properties: { email: { type: 'string' } },
+        required: ['email'],
+      },
+      execute: async () => ({ content: [{ type: 'text', value: 'Order placed' }] }),
+    },
+  ];
+
+  Promise.all(tools.map(t => ctx.registerTool(t)))
+    .then(() => {
+      status.textContent = `Registered ${tools.length} imperative tools + 1 declarative form tool.`;
+      document.getElementById('tools').innerHTML =
+        tools.map(t => `<li><code>${t.name}</code> — ${t.description}</li>`).join('') +
+        '<li><code>subscribe_newsletter</code> — declarative, from the form below</li>';
+    })
+    .catch(err => { status.textContent = 'Registration failed: ' + err.message; });
+}
+</script>
+</body>
+</html>

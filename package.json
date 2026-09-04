@@ -41,7 +41,7 @@
     "commander": "^12.1.0"
   },
   "peerDependencies": {
-    "puppeteer": ">=23"
+    "puppeteer": "^25.10.0"
   },
   "peerDependenciesMeta": {
     "puppeteer": {

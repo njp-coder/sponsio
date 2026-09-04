@@ -76,7 +76,7 @@ export async function capture(options: CaptureOptions): Promise<Snapshot> {
       await sleep(50);
     }
 
-    const tools = webmcp.tools().map(normalizeTool);
+    const tools = await Promise.all(webmcp.tools().map(normalizeTool));
     tools.sort((a, b) => a.name.localeCompare(b.name));
 
     return {
@@ -94,18 +94,29 @@ export async function capture(options: CaptureOptions): Promise<Snapshot> {
 /**
  * The CDP payload and the page-script API disagree on annotation names, and a
  * declarative tool is only identifiable by carrying a backing form element.
+ *
+ * `formElement` is a prototype getter that always returns a promise, so the
+ * property itself is never undefined — only the resolved value distinguishes a
+ * form-backed tool from an imperative one.
  */
-function normalizeTool(raw: RawTool): ToolRecord {
+async function normalizeTool(raw: RawTool): Promise<ToolRecord> {
   const annotations = normalizeAnnotations(raw.annotations);
   return {
     name: raw.name,
     description: raw.description ?? "",
     inputSchema: raw.inputSchema as JsonSchema | undefined,
     ...(annotations ? { annotations } : {}),
-    kind: raw.backendNodeId !== undefined || raw.formElement !== undefined
-      ? "declarative"
-      : "imperative",
+    kind: (await hasFormElement(raw)) ? "declarative" : "imperative",
   };
+}
+
+async function hasFormElement(raw: RawTool): Promise<boolean> {
+  if (raw.backendNodeId !== undefined) return true;
+  try {
+    return (await raw.formElement) != null;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeAnnotations(raw: RawAnnotations | undefined): ToolAnnotations | undefined {
@@ -178,7 +189,8 @@ interface RawTool {
   inputSchema?: unknown;
   annotations?: RawAnnotations;
   backendNodeId?: number;
-  formElement?: unknown;
+  /** Prototype getter: always a promise, resolving to null for imperative tools. */
+  formElement?: Promise<unknown> | unknown;
 }
 
 interface PuppeteerWebMcp {
