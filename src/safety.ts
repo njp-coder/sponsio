@@ -27,6 +27,8 @@ export function auditSafety(snapshot: Snapshot): DiffResult {
     checkDataEgress(tool, findings);
     checkCallerChosenSubject(tool, findings);
     checkLongRunning(tool, snapshot, findings);
+    checkUntrustedOutput(tool, findings);
+    checkAuthenticationSurface(tool, findings);
   }
 
   return summarize(findings);
@@ -135,8 +137,8 @@ const SENSITIVE: { pattern: RegExp; label: string; remedy: string }[] = [
     remedy: "collect it in your own UI, outside the agent's reach.",
   },
   {
-    pattern: /seed[_\s]?phrase|mnemonic|private[_\s]?key|secret[_\s]?key|api[_\s]?key/i,
-    label: "a secret key",
+    pattern: /seed[_\s]?phrase|mnemonic|private[_\s]?key|secret[_\s]?key|api[_\s]?key|session[_\s]?token|auth[_\s]?token|bearer|access[_\s]?token|refresh[_\s]?token/i,
+    label: "a credential",
     remedy: "scope credentials to the session rather than accepting them as input.",
   },
   {
@@ -353,6 +355,80 @@ function sharesSubject(a: string, b: string): boolean {
   // Underscore is a word character, so \bjob\b would miss `job_status`.
   return /\b(job|task|run|request|operation)\b/.test(a.replace(/[_-]/g, " "));
 }
+
+/**
+ * A tool returning content other people wrote is an injection channel.
+ *
+ * Reviews, comments, messages and listings are attacker-writable text that
+ * lands directly in the model's context, which is exactly why the spec has an
+ * `untrustedContent` annotation. A tool that returns them without declaring it
+ * is telling every agent the text can be trusted as instruction.
+ */
+function checkUntrustedOutput(tool: ToolRecord, findings: Finding[]): void {
+  if (tool.annotations?.untrustedContent === true) return;
+
+  const haystack = `${tool.name} ${tool.description}`.replace(/[_-]/g, " ");
+  if (!USER_CONTENT.test(haystack)) return;
+
+  findings.push({
+    severity: "warning",
+    code: "UNDECLARED_UNTRUSTED_OUTPUT",
+    tool: tool.name,
+    message:
+      `Returns content other people wrote but does not set \`untrustedContent\`, so ` +
+      `agents treat it as trusted. Anyone who can post here can write instructions ` +
+      `straight into the model's context.`,
+  });
+}
+
+const USER_CONTENT =
+  /\b(review|reviews|comment|comments|message|messages|post|posts|reply|replies|feedback|testimonial|rating|ratings|listing|listings|thread|threads|note|notes|description|bio|profile|chat|inbox|mail)\b/i;
+
+/**
+ * Authentication is not a tool.
+ *
+ * A surface that lets an agent log in, reset a password, or submit a
+ * verification code hands it the whole account-takeover path — and every one of
+ * those flows exists specifically to establish that a *person* is present. An
+ * agent driving them defeats the control rather than using it.
+ */
+function checkAuthenticationSurface(tool: ToolRecord, findings: Finding[]): void {
+  const haystack = `${tool.name} ${tool.description}`.replace(/[_-]/g, " ");
+  const kind = AUTH_SURFACES.find((entry) => entry.pattern.test(haystack));
+  if (!kind) return;
+
+  findings.push({
+    severity: "breaking",
+    code: "AUTHENTICATION_EXPOSED",
+    tool: tool.name,
+    message:
+      `Exposes ${kind.label} to agents. ${kind.why} Keep authentication in your own ` +
+      `UI and let the agent inherit an already-authenticated session.`,
+  });
+}
+
+const AUTH_SURFACES: { pattern: RegExp; label: string; why: string }[] = [
+  {
+    pattern: /\b(verify|confirm|submit|check)\b.*\b(otp|code|2fa|mfa|token)\b|\b(otp|2fa|mfa)\b.*\bverif/i,
+    label: "one-time code verification",
+    why: "A second factor exists to prove a person is present; an agent submitting it removes the guarantee it was bought for.",
+  },
+  {
+    pattern: /\b(reset|recover|forgot)\b.*\b(password|account|access)\b/i,
+    label: "account recovery",
+    why: "Recovery is the shortest path to taking over an account, and it is designed around a human proving identity out of band.",
+  },
+  {
+    pattern: /\b(log ?in|sign ?in|authenticate|authorize)\b/i,
+    label: "sign-in",
+    why: "It means credentials travel through the model to get there.",
+  },
+  {
+    pattern: /\b(change|update|set)\b.*\b(password|email|phone|2fa|mfa|recovery)\b/i,
+    label: "changing account security settings",
+    why: "Changing the recovery address or second factor is how an account is quietly taken over, not how it is used.",
+  },
+];
 
 /** Every named property in a schema, including nested ones and array elements. */
 function walk(

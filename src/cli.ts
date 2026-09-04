@@ -6,6 +6,8 @@ import { capture, withSession, SponsioError } from "./capture.js";
 import { diffSnapshots, shouldFail, summarize, type FailOn } from "./diff.js";
 import { auditReversibility } from "./reversibility.js";
 import { auditSafety } from "./safety.js";
+import { auditSurface } from "./surface.js";
+import { auditResponses } from "./response.js";
 import { probeConformance } from "./conformance.js";
 import { auditInstrumentation } from "./instrumentation.js";
 import { probeRateLimits } from "./burst.js";
@@ -17,7 +19,7 @@ const DEFAULT_BASELINE = "sponsio.baseline.json";
 const program = new Command()
   .name("sponsio")
   .description("Contract testing for the tools your site exposes to AI agents")
-  .version("0.2.0");
+  .version("0.3.0");
 
 program
   .command("snapshot")
@@ -107,6 +109,7 @@ program
       findings = [
         ...auditReversibility(snapshot).findings,
         ...auditSafety(snapshot).findings,
+        ...auditSurface(snapshot).findings,
       ];
     } else {
       findings = await run(async () =>
@@ -122,12 +125,18 @@ program
             const collected = [
               ...auditReversibility(session.snapshot).findings,
               ...auditSafety(session.snapshot).findings,
+              ...auditSurface(session.snapshot).findings,
             ];
             if (wantsProbe) {
               const probed = await probeConformance(session.tools, {
                 includeUnsafe: Boolean(options.probeUnsafe),
               });
               collected.push(...probed.findings);
+
+              const responses = await auditResponses(session.tools, {
+                includeUnsafe: Boolean(options.probeUnsafe),
+              });
+              collected.push(...responses.findings);
 
               const telemetry = await auditInstrumentation(session, {
                 includeUnsafe: Boolean(options.probeUnsafe),

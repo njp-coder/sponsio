@@ -63,7 +63,7 @@ test("passwords, government ids, secrets and bank details are all flagged", () =
   const cases = {
     password: /password or PIN/,
     ssn: /government identity/,
-    seed_phrase: /secret key/,
+    seed_phrase: /a credential/,
     routing_number: /bank details/,
   };
   for (const [name, expected] of Object.entries(cases)) {
@@ -178,4 +178,58 @@ test("declaring the hint downgrades it to a warning", () => {
     ]),
   );
   assert.equal(find(result, "GRANTS_ACCESS").severity, "warning");
+});
+
+test("session and bearer tokens count as credentials", () => {
+  for (const name of ["session_token", "auth_token", "access_token"]) {
+    const result = auditSafety(
+      snapshot([charge({ type: "object", properties: { [name]: { type: "string" } } })]),
+    );
+    assert.ok(find(result, "SENSITIVE_PARAMETER"), `${name} should be flagged`);
+  }
+});
+
+// A tool returning what other people wrote is an injection channel.
+test("user-generated content without the untrusted hint is flagged", () => {
+  const result = auditSafety(
+    snapshot([{ name: "get_reviews", annotations: { readOnly: true } }]),
+  );
+  assert.equal(find(result, "UNDECLARED_UNTRUSTED_OUTPUT").severity, "warning");
+});
+
+test("declaring untrustedContent clears it", () => {
+  const result = auditSafety(
+    snapshot([{ name: "get_reviews", annotations: { readOnly: true, untrustedContent: true } }]),
+  );
+  assert.equal(find(result, "UNDECLARED_UNTRUSTED_OUTPUT"), undefined);
+});
+
+test("catalogue reads are not mistaken for user content", () => {
+  const result = auditSafety(
+    snapshot([{ name: "search_products", annotations: { readOnly: true } }]),
+  );
+  assert.equal(find(result, "UNDECLARED_UNTRUSTED_OUTPUT"), undefined);
+});
+
+// Authentication flows exist to prove a person is present.
+test("sign-in, recovery, OTP and security changes are all breaking", () => {
+  const cases = {
+    login_user: /sign-in/,
+    reset_password: /account recovery/,
+    verify_otp: /one-time code/,
+    change_recovery_email: /security settings/,
+  };
+  for (const [name, expected] of Object.entries(cases)) {
+    const result = auditSafety(snapshot([{ name }]));
+    const finding = find(result, "AUTHENTICATION_EXPOSED");
+    assert.ok(finding, `${name} should be flagged`);
+    assert.equal(finding.severity, "breaking");
+    assert.match(finding.message, expected);
+  }
+});
+
+test("ordinary tools are not mistaken for authentication", () => {
+  for (const name of ["search_products", "add_to_cart", "get_order_status"]) {
+    assert.equal(find(auditSafety(snapshot([{ name }])), "AUTHENTICATION_EXPOSED"), undefined);
+  }
 });

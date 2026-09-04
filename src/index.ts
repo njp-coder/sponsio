@@ -3,6 +3,8 @@ export type { CaptureOptions, InvocationResult, LiveTool, Session } from "./capt
 export { auditReversibility, effectOf, isPropagating } from "./reversibility.js";
 export type { Effect } from "./reversibility.js";
 export { auditSafety } from "./safety.js";
+export { auditSurface, estimateTokens, similarity } from "./surface.js";
+export { auditResponses, shapeOf, compatible } from "./response.js";
 export { auditInstrumentation } from "./instrumentation.js";
 export { probeRateLimits } from "./burst.js";
 export type { BurstOptions } from "./burst.js";
