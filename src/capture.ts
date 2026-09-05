@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { JsonSchema, Snapshot, ToolAnnotations, ToolRecord } from "./types.js";
 
 export interface CaptureOptions {
@@ -79,9 +80,13 @@ export async function withSession<T>(
   assertSecureContext(options.url);
   const puppeteer = await loadPuppeteer();
 
-  const browser = await puppeteer.launch({
+  // An unset shell variable arrives as "", which Puppeteer treats as a path and
+  // fails on far away from here. Absent is absent.
+  const executablePath = options.executablePath?.trim() || undefined;
+
+  const browser = await launchChrome(puppeteer, {
     headless: options.headless ?? DEFAULTS.headless,
-    executablePath: options.executablePath,
+    executablePath,
     args: [
       ...(options.forceFeature === false ? SANDBOX_ARGS : WEBMCP_LAUNCH_ARGS),
       ...(options.args ?? []),
@@ -225,6 +230,62 @@ function assertSecureContext(url: string): void {
       `WebMCP only runs in a secure context, so ${url} will register no tools.\n` +
         "Use https, or serve on localhost.",
     );
+  }
+}
+
+/**
+ * Puppeteer's own "Could not find Chrome" message tells a first-time user
+ * nothing about their two ways out, so it is translated here.
+ */
+async function launchChrome(
+  puppeteer: PuppeteerModule,
+  options: { headless?: boolean; executablePath?: string; args?: string[] },
+) {
+  // Puppeteer consumes entries out of the args array it is given — after one
+  // launch, --enable-features is gone from it. Reusing that array on a second
+  // attempt silently produces a Chrome without WebMCP, which then reports the
+  // site as exposing nothing. Every attempt gets its own copy.
+  const attempt = (executablePath?: string) =>
+    puppeteer.launch({ ...options, args: [...(options.args ?? [])], ...(executablePath ? { executablePath } : {}) });
+
+  try {
+    return await attempt();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/could not find chrome|failed to launch|executable doesn't exist|ENOENT/i.test(message)) {
+      throw error;
+    }
+
+    // Most people already have Chrome; asking them to download a second copy
+    // before the tool will run once is a poor first impression.
+    if (!options.executablePath && existsSync(defaultChromePath())) {
+      try {
+        return await attempt(defaultChromePath());
+      } catch {
+        /* fall through to the explanation below */
+      }
+    }
+
+    throw new SponsioError(
+      `Chrome could not be started.\n\n` +
+        `sponsio needs Chrome 151 or newer. Either let Puppeteer install one:\n` +
+        `  npx puppeteer browsers install chrome\n\n` +
+        `or point at the Chrome you already have:\n` +
+        `  --executable-path "${defaultChromePath()}"\n\n` +
+        `Underlying error: ${message.split("\n")[0]}`,
+    );
+  }
+}
+
+/** The usual location per platform, so the suggestion is copy-pasteable. */
+function defaultChromePath(): string {
+  switch (process.platform) {
+    case "darwin":
+      return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    case "win32":
+      return "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+    default:
+      return "/usr/bin/google-chrome";
   }
 }
 

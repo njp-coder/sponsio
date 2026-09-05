@@ -204,7 +204,7 @@ instrument({ sinks: [dataLayer()] });
 ## Requirements
 
 - **Node 20+**
-- **Chrome 151+** — sponsio reads tools through Puppeteer's `page.webmcp`, backed by Chromium's WebMCP CDP domain. Install `puppeteer` alongside it, or pass `--executable-path` to point at your own Chrome.
+- **Chrome 151+** — sponsio reads tools through Puppeteer's `page.webmcp`, backed by Chromium's WebMCP CDP domain. It uses the Chrome you already have if Puppeteer has not downloaded one; pass `--executable-path` to choose a specific build.
 - **A secure context.** WebMCP only initializes on `https` or `localhost`; plain http over a LAN address registers no tools at all, and sponsio will tell you so rather than reporting an empty contract.
 
 ```bash
