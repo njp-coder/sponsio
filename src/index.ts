@@ -1,9 +1,11 @@
 export { capture, withSession, SponsioError, WEBMCP_LAUNCH_ARGS } from "./capture.js";
 export type { CaptureOptions, InvocationResult, LiveTool, Session } from "./capture.js";
-export { auditReversibility, effectOf, isPropagating } from "./reversibility.js";
+export { auditReversibility, effectOf, isPropagating, inverseOf } from "./reversibility.js";
 export type { Effect } from "./reversibility.js";
 export { auditSafety } from "./safety.js";
 export { auditSurface, estimateTokens, similarity } from "./surface.js";
+export { auditTasks } from "./tasks.js";
+export type { TaskSpec, TaskNeed } from "./tasks.js";
 export { auditResponses, shapeOf, compatible } from "./response.js";
 export { auditInstrumentation } from "./instrumentation.js";
 export { probeRateLimits } from "./burst.js";

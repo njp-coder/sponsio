@@ -187,6 +187,14 @@ const INVERSES: Record<string, string[]> = {
   stop: [],
 };
 
+/** The tool that undoes a given one, if the surface has one. */
+export function inverseOf(snapshot: Snapshot, toolName: string): string | undefined {
+  const names = snapshot.tools.map((tool) => parseName(tool.name));
+  const index = snapshot.tools.findIndex((tool) => tool.name === toolName);
+  if (index === -1) return undefined;
+  return findInverse(names[index]!, names, snapshot.tools, index);
+}
+
 /** Compensating actions that don't share the original's object, e.g. a global reset. */
 const GLOBAL_INVERSE_VERBS = new Set(["undo", "rollback", "revert", "reset", "restore"]);
 

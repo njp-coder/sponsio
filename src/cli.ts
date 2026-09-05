@@ -12,16 +12,18 @@ import { probeConformance } from "./conformance.js";
 import { auditInstrumentation } from "./instrumentation.js";
 import { probeRateLimits } from "./burst.js";
 import { smokeTest } from "./smoke.js";
+import { auditTasks, type TaskSpec } from "./tasks.js";
 import { renderConsole, renderMarkdown, renderChecklist } from "./report.js";
 import type { DiffResult, Finding, Snapshot } from "./types.js";
 
 const DEFAULT_BASELINE = "sponsio.baseline.json";
 const DEFAULT_FIXTURES = "sponsio.fixtures.json";
+const DEFAULT_TASKS = "sponsio.tasks.json";
 
 const program = new Command()
   .name("sponsio")
   .description("Contract testing for the tools your site exposes to AI agents")
-  .version("0.4.0");
+  .version("0.5.0");
 
 program
   .command("snapshot")
@@ -90,6 +92,7 @@ program
   .option("--burst <n>", "call each tool n times rapidly to see whether anything throttles it")
   .option("--smoke", "call every tool once and report which ones respond")
   .option("--fixtures <file>", "real arguments per tool, so the smoke check means something", DEFAULT_FIXTURES)
+  .option("--tasks <file>", "journeys the surface must be able to express", DEFAULT_TASKS)
   .option("--no-visitor-check", "skip the second pass that checks what a stock browser sees")
   .option("--probe-unsafe", "probe tools that are not declared readOnly (this really calls them)")
   .option("--fail-on <level>", "breaking | warning | any | never", "breaking")
@@ -114,6 +117,7 @@ program
         ...auditReversibility(snapshot).findings,
         ...auditSafety(snapshot).findings,
         ...auditSurface(snapshot).findings,
+        ...auditTasks(snapshot, await readTasks(options.tasks)).findings,
       ];
     } else {
       findings = await run(async () =>
@@ -130,6 +134,7 @@ program
               ...auditReversibility(session.snapshot).findings,
               ...auditSafety(session.snapshot).findings,
               ...auditSurface(session.snapshot).findings,
+              ...auditTasks(session.snapshot, await readTasks(options.tasks)).findings,
             ];
             if (options.smoke) {
               const fixtures = await readFixtures(options.fixtures);
@@ -295,6 +300,30 @@ async function readFixtures(path: string): Promise<Record<string, unknown>> {
     if (error instanceof SyntaxError) fail(`${path} is not valid JSON.`);
     throw error;
   }
+}
+
+/** Like fixtures, tasks are optional: a missing default file means no tasks. */
+async function readTasks(path: string): Promise<TaskSpec[]> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    if (path !== DEFAULT_TASKS) fail(`No tasks file at ${path}.`);
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    fail(`${path} is not valid JSON.`);
+  }
+  const tasks = Array.isArray(parsed)
+    ? parsed
+    : (parsed as { tasks?: unknown })?.tasks;
+  if (!Array.isArray(tasks)) {
+    fail(`${path} must be an array of tasks, or an object with a "tasks" array.`);
+  }
+  return tasks as TaskSpec[];
 }
 
 async function readSnapshot(path: string): Promise<Snapshot> {

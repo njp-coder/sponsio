@@ -75,6 +75,39 @@ Four checks, each from a way agents actually fail:
 
 **Effect escape.** Some actions have an inverse that doesn't actually undo them. A recalled message may already have been read; a refunded charge still moved money. Structural reversibility and real reversibility are different things, and only the first is visible in a schema.
 
+### Can an agent still do the thing your users came for?
+
+Declare the journeys that matter and sponsio checks whether your tool surface can express them at all — deterministically, from the schemas, with no model and no API key.
+
+```json
+{ "tasks": [
+  { "name": "Find a cast iron pan under $50",
+    "needs": [ { "tool": "search_products", "param": "price", "numeric": true, "bounded": true } ] },
+  { "name": "Browse the toys category",
+    "needs": [ { "param": "pillar", "enumValue": "toys" } ] },
+  { "name": "Buy it, and be able to change your mind",
+    "needs": [ { "tool": "checkout" }, { "reversible": "checkout" } ] }
+] }
+```
+
+```
+«Find a cast iron pan under $50»
+  BREAKING `search_products` has no parameter for "price".
+
+«Browse the toys category»
+  BREAKING "pillar" no longer offers "toys", so this journey silently
+           returns nothing.
+
+«Buy it, and be able to change your mind»
+  BREAKING `checkout` has nothing that undoes it, so the journey is one-way.
+```
+
+This is the same enum drift the diff catches, said in the language of the person who has to care: not *a value was removed* but *this journey stopped working*.
+
+A `need` can require a tool, a parameter concept (matched on names **and** descriptions), that the parameter be numeric or express a range rather than a single value, that an enum still offers a specific option, or that a tool have something that undoes it.
+
+**What this is not:** it does not run a model, so it cannot tell you whether an agent would *choose* the right tool. That is a genuinely different problem — non-deterministic, priced per run, and unfit for a build gate. This answers the question underneath it: whether the surface makes the task possible in the first place.
+
 ### Does every tool actually work?
 
 The diff catches a contract that changed and the audit catches a surface that is unsafe. Neither notices a tool that is registered, correctly shaped, identical to its baseline, and simply broken.

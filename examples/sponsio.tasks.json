@@ -1,0 +1,25 @@
+{
+  "tasks": [
+    {
+      "name": "Find a cast iron pan under $50",
+      "needs": [
+        { "tool": "search_products" },
+        { "tool": "search_products", "param": "price", "numeric": true, "bounded": true }
+      ]
+    },
+    {
+      "name": "Browse the toys category",
+      "needs": [
+        { "param": "pillar", "enumValue": "toys" }
+      ]
+    },
+    {
+      "name": "Buy it, and be able to change your mind",
+      "needs": [
+        { "tool": "add_to_cart" },
+        { "tool": "checkout" },
+        { "reversible": "checkout" }
+      ]
+    }
+  ]
+}
