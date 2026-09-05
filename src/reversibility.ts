@@ -79,14 +79,38 @@ export function isPropagating(toolName: string): boolean {
 /**
  * Annotations win when present; otherwise the verb is the only evidence
  * available, and an unannotated `delete_account` should not be treated as a read.
+ *
+ * The object matters as much as the verb. Cancelling an *order* moves money and
+ * fulfilment; cancelling a *cart* discards a selection the shopper can rebuild.
+ * Treating both as equally grave means crying wolf on the single most common
+ * tool in commerce, so working state is graded down a level.
  */
 function classify(tool: ToolRecord, parsed: ParsedName): Effect {
   if (tool.annotations?.consequential === true) return "consequential";
   if (tool.annotations?.readOnly === true) return "read";
-  if (HIGH_RISK_VERBS.has(parsed.verb)) return "consequential";
+
+  const risky = HIGH_RISK_VERBS.has(parsed.verb);
+  if (risky && isWorkingState(parsed.object)) return "inferred";
+  if (risky) return "consequential";
   if (MUTATING_VERBS.has(parsed.verb)) return "inferred";
   return "read";
 }
+
+/**
+ * State a person is still assembling, rather than something committed. Losing
+ * it is an annoyance to redo, not a loss to recover.
+ */
+function isWorkingState(object: string): boolean {
+  if (object === "") return false;
+  return object
+    .split("_")
+    .some((word) => WORKING_STATE.has(word));
+}
+
+const WORKING_STATE = new Set([
+  "cart", "basket", "bag", "draft", "selection", "filter", "search", "query",
+  "session", "preference", "wishlist", "favorite", "comparison", "form",
+]);
 
 export interface ParsedName {
   raw: string;

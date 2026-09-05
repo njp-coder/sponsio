@@ -116,3 +116,20 @@ test("a realistic shop surfaces exactly the irreversible action", () => {
   );
   assert.equal(result.counts.breaking, 1);
 });
+
+// The object matters as much as the verb: cancelling an order moves money,
+// cancelling a cart discards a selection the shopper can rebuild.
+test("destroying working state is a warning, not breaking", () => {
+  const cart = auditReversibility(snapshot([{ name: "cancel_cart" }]));
+  assert.equal(find(cart, "cancel_cart", "NO_INVERSE").severity, "warning");
+
+  const order = auditReversibility(snapshot([{ name: "cancel_order" }]));
+  assert.equal(find(order, "cancel_order", "NO_INVERSE").severity, "breaking");
+});
+
+test("an explicit consequential hint still outranks the guess", () => {
+  const result = auditReversibility(
+    snapshot([{ name: "cancel_cart", annotations: { consequential: true } }]),
+  );
+  assert.equal(find(result, "cancel_cart", "NO_INVERSE").severity, "breaking");
+});
