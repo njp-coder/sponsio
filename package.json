@@ -16,7 +16,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "src",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
@@ -51,5 +53,14 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0"
-  }
+  },
+  "author": "Naga Jyothi Prakash",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GITHUB_OWNER/sponsio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GITHUB_OWNER/sponsio/issues"
+  },
+  "homepage": "https://github.com/GITHUB_OWNER/sponsio#readme"
 }

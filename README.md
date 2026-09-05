@@ -178,7 +178,7 @@ With `--probe`, sponsio calls each tool and watches whether anything is recorded
 ## CI
 
 ```yaml
-- uses: your-org/sponsio/action@v0
+- uses: GITHUB_OWNER/sponsio/action@v0
   with:
     url: https://shop.example
     fail-on: breaking
@@ -194,7 +194,7 @@ sponsio diff before.json after.json                      # offline, no browser
 
 ## Making agent activity visible
 
-The audit tells you when none of your tools emit any telemetry. [`agentpixel`](https://github.com/agentpixel/agentpixel) is the fix — a zero-dependency browser shim that sends every agent tool call to the analytics you already run (GA4, GTM, PostHog, Segment, Mixpanel), covering both imperative tools and the declarative form tools most instrumentation misses.
+The audit tells you when none of your tools emit any telemetry. [`agentpixel`](https://github.com/GITHUB_OWNER/agentpixel) is the fix — a zero-dependency browser shim that sends every agent tool call to the analytics you already run (GA4, GTM, PostHog, Segment, Mixpanel), covering both imperative tools and the declarative form tools most instrumentation misses.
 
 ```js
 import { instrument, dataLayer } from "agentpixel";
