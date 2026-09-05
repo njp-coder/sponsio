@@ -233,3 +233,40 @@ test("ordinary tools are not mistaken for authentication", () => {
     assert.equal(find(auditSafety(snapshot([{ name }])), "AUTHENTICATION_EXPOSED"), undefined);
   }
 });
+
+// A description saying the user will be prompted to log in describes the
+// correct design. Accusing it of exposing authentication is a false positive,
+// and this one was found on a real production storefront.
+test("navigating a human to a login page is not exposing authentication", () => {
+  const result = auditSafety(
+    snapshot([{
+      name: "manage_orders",
+      description: "Navigate to the customer's order history page. The user will be prompted to log in if not already authenticated.",
+    }]),
+  );
+  assert.equal(find(result, "AUTHENTICATION_EXPOSED"), undefined);
+});
+
+test("a tool that performs authentication is still caught by its name", () => {
+  assert.ok(find(auditSafety(snapshot([{ name: "login_user" }])), "AUTHENTICATION_EXPOSED"));
+  assert.ok(find(auditSafety(snapshot([{ name: "verify_otp" }])), "AUTHENTICATION_EXPOSED"));
+});
+
+// A second delete deletes nothing new.
+test("naturally idempotent actions need no idempotency key", () => {
+  for (const name of ["cancel_cart", "delete_item", "clear_cart", "unsubscribe_user"]) {
+    const result = auditSafety(
+      snapshot([{ name, annotations: { consequential: true }, inputSchema: { type: "object", properties: {} } }]),
+    );
+    assert.equal(find(result, "NO_IDEMPOTENCY_KEY"), undefined, `${name} should not need one`);
+  }
+});
+
+test("actions that create or send still need one", () => {
+  for (const name of ["charge_card", "send_receipt", "create_order"]) {
+    const result = auditSafety(
+      snapshot([{ name, annotations: { consequential: true }, inputSchema: { type: "object", properties: {} } }]),
+    );
+    assert.ok(find(result, "NO_IDEMPOTENCY_KEY"), `${name} should need one`);
+  }
+});

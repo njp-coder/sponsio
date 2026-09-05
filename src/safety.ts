@@ -78,6 +78,9 @@ function checkIdempotency(tool: ToolRecord, findings: Finding[]): void {
   const effect = effectOf(tool);
   if (effect !== "consequential") return;
   if (!tool.inputSchema) return;
+  // A second delete deletes nothing new. Duplication only harms operations that
+  // create, move or send, so naturally idempotent ones are left alone.
+  if (NATURALLY_IDEMPOTENT.has(parseName(tool.name).verb)) return;
 
   const hasKey = walk(tool.inputSchema).some(({ name }) => IDEMPOTENCY_KEY.test(name));
   if (hasKey) return;
@@ -92,6 +95,11 @@ function checkIdempotency(tool: ToolRecord, findings: Finding[]): void {
       `Accept an \`idempotency_key\` and dedupe on it.`,
   });
 }
+
+const NATURALLY_IDEMPOTENT = new Set([
+  "delete", "remove", "cancel", "clear", "empty", "reset", "revoke", "disable",
+  "enable", "archive", "unsubscribe", "unshare", "unassign", "close", "stop",
+]);
 
 const IDEMPOTENCY_KEY = /idempot|dedup|(^|_)nonce($|_)|request_?id|client_?token|client_?ref/i;
 
@@ -393,7 +401,12 @@ const USER_CONTENT =
  * agent driving them defeats the control rather than using it.
  */
 function checkAuthenticationSurface(tool: ToolRecord, findings: Finding[]): void {
-  const haystack = `${tool.name} ${tool.description}`.replace(/[_-]/g, " ");
+  // Matched on the name alone, deliberately. A tool whose description says the
+  // user will be prompted to log in is doing the right thing — sending the
+  // human to authenticate — and flagging that is a false accusation. What
+  // matters is a tool that *performs* authentication, and that shows in its
+  // name. Credentials arriving as arguments are caught separately.
+  const haystack = tool.name.replace(/[_-]/g, " ");
   const kind = AUTH_SURFACES.find((entry) => entry.pattern.test(haystack));
   if (!kind) return;
 
