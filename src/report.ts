@@ -1,4 +1,5 @@
 import type { DiffResult, Finding, Severity } from "./types.js";
+import type { SmokeResult } from "./smoke.js";
 
 const useColor = process.env["NO_COLOR"] === undefined && process.stdout.isTTY === true;
 
@@ -50,6 +51,40 @@ function summaryLine(result: DiffResult): string {
     `${result.counts.safe} safe`,
   ];
   return parts.join(paint("2", " · "));
+}
+
+/**
+ * The smoke checklist: the one output that needs no severity model explained
+ * and no knowledge of WebMCP to read.
+ */
+export function renderChecklist(results: SmokeResult[]): string {
+  if (results.length === 0) return paint("2", "No tools to call.");
+
+  const width = Math.max(...results.map((r) => r.tool.length));
+  const lines: string[] = [];
+
+  for (const result of results) {
+    const name = result.tool.padEnd(width);
+    switch (result.status) {
+      case "ok":
+        lines.push(
+          `  ${paint("32", "✓")} ${name}  ${paint("2", `${result.durationMs}ms`)}` +
+            (result.input === "fixture" ? paint("2", "  fixture") : ""),
+        );
+        break;
+      case "skipped":
+        lines.push(`  ${paint("2", "·")} ${paint("2", name)}  ${paint("2", "not called")}`);
+        break;
+      default:
+        lines.push(`  ${paint("31;1", "✗")} ${name}`);
+        lines.push(`      ${paint("31", result.detail ?? result.status)}`);
+    }
+  }
+
+  const ok = results.filter((r) => r.status === "ok").length;
+  const called = results.filter((r) => r.status !== "skipped").length;
+  lines.push("", paint("1", `${ok}/${called} tools responded`));
+  return lines.join("\n");
 }
 
 /** GitHub-flavoured markdown, sized for a PR comment or a step summary. */

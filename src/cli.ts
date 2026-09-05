@@ -11,15 +11,17 @@ import { auditResponses } from "./response.js";
 import { probeConformance } from "./conformance.js";
 import { auditInstrumentation } from "./instrumentation.js";
 import { probeRateLimits } from "./burst.js";
-import { renderConsole, renderMarkdown } from "./report.js";
+import { smokeTest } from "./smoke.js";
+import { renderConsole, renderMarkdown, renderChecklist } from "./report.js";
 import type { DiffResult, Finding, Snapshot } from "./types.js";
 
 const DEFAULT_BASELINE = "sponsio.baseline.json";
+const DEFAULT_FIXTURES = "sponsio.fixtures.json";
 
 const program = new Command()
   .name("sponsio")
   .description("Contract testing for the tools your site exposes to AI agents")
-  .version("0.3.0");
+  .version("0.4.0");
 
 program
   .command("snapshot")
@@ -86,6 +88,8 @@ program
   .description("check whether agents can safely act here: reversibility, and schema enforcement")
   .option("--probe", "also call each tool with input its own schema forbids")
   .option("--burst <n>", "call each tool n times rapidly to see whether anything throttles it")
+  .option("--smoke", "call every tool once and report which ones respond")
+  .option("--fixtures <file>", "real arguments per tool, so the smoke check means something", DEFAULT_FIXTURES)
   .option("--no-visitor-check", "skip the second pass that checks what a stock browser sees")
   .option("--probe-unsafe", "probe tools that are not declared readOnly (this really calls them)")
   .option("--fail-on <level>", "breaking | warning | any | never", "breaking")
@@ -127,6 +131,19 @@ program
               ...auditSafety(session.snapshot).findings,
               ...auditSurface(session.snapshot).findings,
             ];
+            if (options.smoke) {
+              const fixtures = await readFixtures(options.fixtures);
+              const smoke = await smokeTest(session.tools, {
+                fixtures,
+                includeUnsafe: Boolean(options.probeUnsafe),
+              });
+              // The checklist is the point of this check, so it prints as a
+              // checklist rather than dissolving into the findings list.
+              console.log(renderChecklist(smoke.results));
+              console.log("");
+              collected.push(...smoke.findings);
+            }
+
             if (wantsProbe) {
               const probed = await probeConformance(session.tools, {
                 includeUnsafe: Boolean(options.probeUnsafe),
@@ -254,6 +271,30 @@ function parseFailOn(value: string): FailOn {
     return value;
   }
   fail(`--fail-on must be breaking, warning, any, or never (got "${value}")`);
+}
+
+/**
+ * Fixtures are optional: their absence weakens the smoke check rather than
+ * failing it, so a missing default file is silence, not an error.
+ */
+async function readFixtures(path: string): Promise<Record<string, unknown>> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    if (path !== DEFAULT_FIXTURES) fail(`No fixtures file at ${path}.`);
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      fail(`${path} must be an object mapping tool names to arguments.`);
+    }
+    return parsed as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof SyntaxError) fail(`${path} is not valid JSON.`);
+    throw error;
+  }
 }
 
 async function readSnapshot(path: string): Promise<Snapshot> {

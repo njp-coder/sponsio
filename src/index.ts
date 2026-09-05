@@ -12,7 +12,9 @@ export { probeConformance, buildViolations, buildValidInput } from "./conformanc
 export type { ProbeOptions } from "./conformance.js";
 export { diffSnapshots, shouldFail, summarize } from "./diff.js";
 export type { FailOn } from "./diff.js";
-export { renderConsole, renderMarkdown } from "./report.js";
+export { renderConsole, renderMarkdown, renderChecklist } from "./report.js";
+export { smokeTest } from "./smoke.js";
+export type { SmokeOptions, SmokeResult } from "./smoke.js";
 export type {
   DiffResult,
   Finding,

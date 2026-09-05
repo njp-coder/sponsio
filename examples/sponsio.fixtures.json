@@ -1,0 +1,5 @@
+{
+  "search_products": { "query": "cast iron" },
+  "add_to_cart": { "product_id": "p1", "quantity": 2 },
+  "subscribe_newsletter": { "email": "agent@example.com" }
+}

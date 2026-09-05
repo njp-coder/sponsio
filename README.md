@@ -75,6 +75,35 @@ Four checks, each from a way agents actually fail:
 
 **Effect escape.** Some actions have an inverse that doesn't actually undo them. A recalled message may already have been read; a refunded charge still moved money. Structural reversibility and real reversibility are different things, and only the first is visible in a schema.
 
+### Does every tool actually work?
+
+The diff catches a contract that changed and the audit catches a surface that is unsafe. Neither notices a tool that is registered, correctly shaped, identical to its baseline, and simply broken.
+
+```bash
+npx sponsio audit https://shop.example --smoke --fixtures sponsio.fixtures.json
+```
+
+```
+  ✓ add_to_cart           1ms  fixture
+  ✓ search_products       0ms  fixture
+  ✗ subscribe_newsletter
+      The site has a programming error: it called preventDefault() on the
+      'submit' event, without also calling respondWith() with the tool result
+
+  2/3 tools responded
+```
+
+Give it real arguments and the check means something:
+
+```json
+{ "search_products": { "query": "cast iron" },
+  "add_to_cart": { "product_id": "p1", "quantity": 2 } }
+```
+
+Generated arguments satisfy your *schema* but not your *world* — a made-up product id is supposed to be rejected — so a rejection without a fixture is only a warning, while a rejection of arguments **you** supplied is breaking. Writing a fixture for a tool also opts it in to being called even when it is not `readOnly`, since typing real arguments for it says plainly that you want it run.
+
+This proves your tools respond. It does not prove they do the right thing.
+
 ### Probing: does a tool honor its own schema?
 
 `inputSchema` is advisory. The browser hands it to the agent as guidance and validates nothing, and an independent scan found **78% of probes were accepted despite violating the tool's own declared schema** — on Google's own reference demos. So testing the declaration alone tests a document, not a system.

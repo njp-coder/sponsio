@@ -20,6 +20,9 @@
 <ul id="tools"></ul>
 
 <!-- Declarative tool: the browser synthesizes a tool from this annotated form. -->
+<!-- Deliberately left broken: preventDefault() without respondWith() means the
+     tool registers cleanly, matches its baseline, and still fails when called.
+     The smoke check exists to catch exactly this, so the fixture keeps it. -->
 <form toolname="subscribe_newsletter"
       tooldescription="Subscribe an email address to the newsletter"
       toolautosubmit

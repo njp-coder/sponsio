@@ -1,5 +1,5 @@
 import { summarize } from "./diff.js";
-import type { DiffResult, Finding, Snapshot, ToolRecord } from "./types.js";
+import type { DiffResult, Finding, JsonSchema, Snapshot, ToolRecord } from "./types.js";
 
 /**
  * Properties of the tool surface as a whole, rather than of any one tool.
@@ -18,6 +18,8 @@ export function auditSurface(snapshot: Snapshot): DiffResult {
   checkContextWeight(snapshot, findings);
   checkToolCount(snapshot, findings);
   checkDescriptions(snapshot, findings);
+  checkDuplicateNames(snapshot, findings);
+  checkParameterTypes(snapshot, findings);
 
   return summarize(findings);
 }
@@ -116,6 +118,60 @@ function checkDescriptions(snapshot: Snapshot, findings: Finding[]): void {
       });
     }
   }
+}
+
+/**
+ * Two tools registered under one name means the agent's choice is decided by
+ * registration order rather than by anything it can see.
+ */
+function checkDuplicateNames(snapshot: Snapshot, findings: Finding[]): void {
+  const seen = new Map<string, number>();
+  for (const tool of snapshot.tools) {
+    seen.set(tool.name, (seen.get(tool.name) ?? 0) + 1);
+  }
+  for (const [name, count] of seen) {
+    if (count < 2) continue;
+    findings.push({
+      severity: "breaking",
+      code: "DUPLICATE_TOOL_NAME",
+      tool: name,
+      message:
+        `Registered ${count} times. Which one an agent reaches depends on ` +
+        `registration order, so behaviour changes with load timing.`,
+    });
+  }
+}
+
+/**
+ * A parameter with no declared type tells the model nothing about what to put
+ * there, so it guesses — and guesses differently between runs.
+ */
+function checkParameterTypes(snapshot: Snapshot, findings: Finding[]): void {
+  for (const tool of snapshot.tools) {
+    if (!tool.inputSchema) continue;
+    for (const [name, property] of Object.entries(tool.inputSchema.properties ?? {})) {
+      if (describesAType(property)) continue;
+      findings.push({
+        severity: "warning",
+        code: "UNTYPED_PARAMETER",
+        tool: tool.name,
+        path: name,
+        message: `No declared type, so the model has to guess what belongs here.`,
+      });
+    }
+  }
+}
+
+function describesAType(schema: JsonSchema): boolean {
+  return (
+    schema.type !== undefined ||
+    schema.enum !== undefined ||
+    schema["const"] !== undefined ||
+    schema.$ref !== undefined ||
+    schema.oneOf !== undefined ||
+    schema.anyOf !== undefined ||
+    schema.allOf !== undefined
+  );
 }
 
 /** Jaccard overlap of meaningful words — cheap, and enough to catch copy-paste. */
