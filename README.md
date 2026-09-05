@@ -1,5 +1,11 @@
 # sponsio
 
+<img src="https://raw.githubusercontent.com/njp-coder/sponsio/main/assets/mascot.svg" width="112" align="right" alt="">
+
+[![npm](https://img.shields.io/npm/v/sponsio?color=%231b3557)](https://www.npmjs.com/package/sponsio)
+[![license](https://img.shields.io/npm/l/sponsio?color=%231b3557)](https://github.com/njp-coder/sponsio/blob/main/LICENSE)
+[![node](https://img.shields.io/node/v/sponsio?color=%231b3557)](https://nodejs.org)
+
 **Contract testing for the tools your site exposes to AI agents.**
 
 When your UI breaks, users complain. When the tools your site exposes to agents break, nothing happens — no error page, no support ticket. An AI shopping assistant just quietly fails to buy from you and buys somewhere else.
@@ -10,6 +16,8 @@ sponsio records the tools a page registers, commits that record to your repo, an
 npx sponsio snapshot https://shop.example -o sponsio.baseline.json   # record
 npx sponsio check    https://shop.example                             # enforce
 ```
+
+<img src="https://raw.githubusercontent.com/njp-coder/sponsio/main/assets/demo.gif" width="760" alt="sponsio auditing a shop: findings stream in and the run exits non-zero">
 
 ```
 search_products
@@ -194,7 +202,7 @@ sponsio diff before.json after.json                      # offline, no browser
 
 ## Making agent activity visible
 
-The audit tells you when none of your tools emit any telemetry. [`agentpixel`](https://github.com/njp-coder/agentpixel) is the fix — a zero-dependency browser shim that sends every agent tool call to the analytics you already run (GA4, GTM, PostHog, Segment, Mixpanel), covering both imperative tools and the declarative form tools most instrumentation misses.
+The audit tells you when none of your tools emit any telemetry. [`agentpixel`](https://www.npmjs.com/package/agentpixel) ([source](https://github.com/njp-coder/agentpixel)) is the fix — a zero-dependency browser shim that sends every agent tool call to the analytics you already run (GA4, GTM, PostHog, Segment, Mixpanel), covering both imperative tools and the declarative form tools most instrumentation misses.
 
 ```js
 import { instrument, dataLayer } from "agentpixel";
@@ -233,5 +241,9 @@ if (shouldFail(result, "breaking")) {
 Early. The capture path tracks a spec that is still moving — WebMCP is a W3C Community Group draft in Chrome and Edge origin trials, and the API moved from `navigator.modelContext` to `document.modelContext` in Chrome 150. That churn is a large part of why this exists: a project shipped eight tools that registered nothing for three months because their tests mocked the browser API while the real root object moved.
 
 Issues and integrations welcome, particularly captures from real sites with unusual registration patterns.
+
+## Links
+
+[npm](https://www.npmjs.com/package/sponsio) · [source](https://github.com/njp-coder/sponsio) · [issues](https://github.com/njp-coder/sponsio/issues) · companion package [agentpixel](https://www.npmjs.com/package/agentpixel)
 
 MIT
