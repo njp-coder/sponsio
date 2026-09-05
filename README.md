@@ -106,6 +106,14 @@ This is the same enum drift the diff catches, said in the language of the person
 
 A `need` can require a tool, a parameter concept (matched on names **and** descriptions), that the parameter be numeric or express a range rather than a single value, that an enum still offers a specific option, or that a tool have something that undoes it.
 
+Don't start from a blank file — draft one from the tools you already expose:
+
+```bash
+npx sponsio tasks https://shop.example
+```
+
+**A caution about `enumValue`.** Allowed values are often *data*, not contract. If your categories come from your catalogue, then removing one is ordinary business, and asserting on it means this check cries wolf every time inventory changes. Use `enumValue` only for values you consider genuinely permanent — and note the audit separately flags enums long enough to look like a table (`DATA_SHAPED_ENUM`), because a schema carrying your catalogue turns every stock change into a contract change.
+
 **What this is not:** it does not run a model, so it cannot tell you whether an agent would *choose* the right tool. That is a genuinely different problem — non-deterministic, priced per run, and unfit for a build gate. This answers the question underneath it: whether the surface makes the task possible in the first place.
 
 ### Does every tool actually work?

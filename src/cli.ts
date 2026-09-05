@@ -12,7 +12,7 @@ import { probeConformance } from "./conformance.js";
 import { auditInstrumentation } from "./instrumentation.js";
 import { probeRateLimits } from "./burst.js";
 import { smokeTest } from "./smoke.js";
-import { auditTasks, type TaskSpec } from "./tasks.js";
+import { auditTasks, draftTasks, type TaskSpec } from "./tasks.js";
 import { renderConsole, renderMarkdown, renderChecklist } from "./report.js";
 import type { DiffResult, Finding, Snapshot } from "./types.js";
 
@@ -201,6 +201,34 @@ program
     }
 
     await emit(summarize(findings), label, options);
+  });
+
+program
+  .command("tasks")
+  .argument("<target>", "page to load, or a saved snapshot file")
+  .description("draft a starting tasks file from the tools a site already exposes")
+  .option("-o, --out <file>", "where to write it", DEFAULT_TASKS)
+  .option("--settle <ms>", "quiet period before reading tools", "400")
+  .option("--timeout <ms>", "hard ceiling on the wait", "10000")
+  .option("--executable-path <path>", "Chrome 151+ binary to use")
+  .action(async (target: string, options) => {
+    const snapshot = isUrl(target)
+      ? await run(() =>
+          capture({
+            url: target,
+            settleMs: Number(options.settle),
+            timeoutMs: Number(options.timeout),
+            executablePath: options.executablePath,
+          }),
+        )
+      : await readSnapshot(target);
+
+    const draft = draftTasks(snapshot);
+    await writeJson(options.out, draft);
+    console.log(`Drafted ${draft.tasks.length} task(s) → ${options.out}`);
+    for (const task of draft.tasks) console.log(`  ${task.name}`);
+    console.log("\nRename these to the journeys your users actually take, then:");
+    console.log(`  sponsio audit ${target} --tasks ${options.out}`);
   });
 
 program

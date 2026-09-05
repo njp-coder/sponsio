@@ -20,6 +20,7 @@ export function auditSurface(snapshot: Snapshot): DiffResult {
   checkDescriptions(snapshot, findings);
   checkDuplicateNames(snapshot, findings);
   checkParameterTypes(snapshot, findings);
+  checkDataShapedEnums(snapshot, findings);
 
   return summarize(findings);
 }
@@ -119,6 +120,36 @@ function checkDescriptions(snapshot: Snapshot, findings: Finding[]): void {
     }
   }
 }
+
+/**
+ * An enum long enough to be a catalogue is data, not a contract.
+ *
+ * When a parameter's allowed values come from a database — categories, brands,
+ * warehouses — every inventory change becomes a contract change, and anything
+ * watching that contract cries wolf on ordinary business. Either the values are
+ * genuinely permanent, or they belong in free text validated server-side.
+ */
+function checkDataShapedEnums(snapshot: Snapshot, findings: Finding[]): void {
+  for (const tool of snapshot.tools) {
+    if (!tool.inputSchema) continue;
+    for (const [name, property] of Object.entries(tool.inputSchema.properties ?? {})) {
+      if (!Array.isArray(property.enum) || property.enum.length <= CATALOGUE_SIZE) continue;
+      findings.push({
+        severity: "warning",
+        code: "DATA_SHAPED_ENUM",
+        tool: tool.name,
+        path: name,
+        message:
+          `${property.enum.length} allowed values looks like data rather than a ` +
+          `contract. If these come from your catalogue, every inventory change is ` +
+          `now a schema change — take free text and validate it server-side instead.`,
+      });
+    }
+  }
+}
+
+/** Beyond this, an enum is almost always a table rather than a decision. */
+const CATALOGUE_SIZE = 12;
 
 /**
  * Two tools registered under one name means the agent's choice is decided by

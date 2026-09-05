@@ -95,3 +95,21 @@ test("an empty collection stays compatible with a populated one", () => {
 test("incompatible shapes are not forced to match", () => {
   assert.equal(compatible(shapeOf({ ok: true }), shapeOf({ error: "nope" })), false);
 });
+
+// An enum long enough to be a catalogue is data, and data churns.
+test("a catalogue-sized enum is flagged as data rather than contract", () => {
+  const many = Array.from({ length: 40 }, (_, i) => `brand_${i}`);
+  const result = auditSurface(
+    snapshot([{ name: "search", inputSchema: { type: "object", properties: { brand: { enum: many } } } }]),
+  );
+  const finding = find(result, "DATA_SHAPED_ENUM");
+  assert.equal(finding.severity, "warning");
+  assert.match(finding.message, /every inventory change is now a schema change/);
+});
+
+test("a short enum is a genuine decision and is left alone", () => {
+  const result = auditSurface(
+    snapshot([{ name: "search", inputSchema: { type: "object", properties: { size: { enum: ["s", "m", "l"] } } } }]),
+  );
+  assert.equal(find(result, "DATA_SHAPED_ENUM"), undefined);
+});

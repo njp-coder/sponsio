@@ -4,7 +4,7 @@ export { auditReversibility, effectOf, isPropagating, inverseOf } from "./revers
 export type { Effect } from "./reversibility.js";
 export { auditSafety } from "./safety.js";
 export { auditSurface, estimateTokens, similarity } from "./surface.js";
-export { auditTasks } from "./tasks.js";
+export { auditTasks, draftTasks } from "./tasks.js";
 export type { TaskSpec, TaskNeed } from "./tasks.js";
 export { auditResponses, shapeOf, compatible } from "./response.js";
 export { auditInstrumentation } from "./instrumentation.js";

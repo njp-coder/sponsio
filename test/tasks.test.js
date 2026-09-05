@@ -129,3 +129,24 @@ test("every unmet need is reported, not just the first", () => {
   ]);
   assert.equal(r.findings.length, 3);
 });
+
+test("a draft is generated from the surface, without inventing enum values", async () => {
+  const { draftTasks } = await import("../dist/index.js");
+  const draft = draftTasks(shop);
+
+  assert.ok(draft.tasks.length > 0);
+  assert.ok(draft.tasks.some((t) => t.needs.some((n) => n.reversible === "checkout")),
+    "a consequential tool should be drafted with a reversibility need");
+  // The guidance text mentions enumValue on purpose; the generated needs must not.
+  assert.equal(
+    JSON.stringify(draft.tasks).includes("enumValue"), false,
+    "catalogue values are the user's to declare, never ours to guess",
+  );
+  assert.match(draft.$comment, /cry wolf/);
+});
+
+test("a surface with no annotations still yields something to start from", async () => {
+  const { draftTasks } = await import("../dist/index.js");
+  const bare = snapshot([{ name: "do_thing" }]);
+  assert.equal(draftTasks(bare).tasks.length, 1);
+});

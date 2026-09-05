@@ -1,5 +1,5 @@
 import { summarize } from "./diff.js";
-import { inverseOf } from "./reversibility.js";
+import { effectOf, inverseOf } from "./reversibility.js";
 import type { DiffResult, Finding, JsonSchema, Snapshot, ToolRecord } from "./types.js";
 
 /**
@@ -165,3 +165,48 @@ function isBounded(entry: Parameter): boolean {
 }
 
 const RANGE_WORD = /\b(min|max|minimum|maximum|from|to|under|over|below|above|before|after|since|until|lte|gte)\b/i;
+
+/**
+ * A starting tasks file derived from the surface itself.
+ *
+ * Nobody writes config before seeing value, and a blank file is the worst
+ * onboarding there is. This proposes journeys from what is actually
+ * registered — deliberately without hard-coding any enum values, because those
+ * are frequently catalogue data and only their owner knows which of them are
+ * genuinely contractual.
+ */
+export function draftTasks(snapshot: Snapshot): { $comment: string; tasks: TaskSpec[] } {
+  const tasks: TaskSpec[] = [];
+  const named = (predicate: (tool: ToolRecord) => boolean) =>
+    snapshot.tools.filter(predicate).map((tool) => tool.name);
+
+  // Chrome does not yet surface the consequential annotation, so a draft built
+  // only from declared hints finds nothing to protect. Fall back to the same
+  // effect inference the reversibility audit uses.
+  const reads = named((tool) => effectOf(tool) === "read");
+  const consequential = named((tool) => effectOf(tool) === "consequential");
+
+  for (const tool of reads.slice(0, 3)) {
+    tasks.push({ name: `Use ${tool}`, needs: [{ tool }] });
+  }
+
+  for (const tool of consequential) {
+    tasks.push({
+      name: `Complete ${tool}, and be able to change your mind`,
+      needs: [{ tool }, { reversible: tool }],
+    });
+  }
+
+  if (tasks.length === 0 && snapshot.tools[0]) {
+    tasks.push({ name: `Use ${snapshot.tools[0].name}`, needs: [{ tool: snapshot.tools[0].name }] });
+  }
+
+  return {
+    $comment:
+      "Draft — rename these to the journeys your users actually take. Add " +
+      "{ param, numeric, bounded } for filters like \"under $150\". Add " +
+      "{ param, enumValue } only for values you consider part of your contract: " +
+      "if they come from your catalogue, they will churn and this will cry wolf.",
+    tasks,
+  };
+}
